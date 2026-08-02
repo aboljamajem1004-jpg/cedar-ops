@@ -441,6 +441,14 @@ player capsule already uses.
 *Retrofit cost: rewriting vehicle movement and prediction after discovering the
 desync — the worst possible time.*
 
+> **Agreed scope for vehicles — settled, do not re-argue.**
+> **In:** an arcade truck that drives, carries passengers, and mounts a gun.
+> **Out:** simulated suspension, rollovers, and vehicle-vs-vehicle collision
+> physics. Vehicle-vs-player contact is a designed rule, not a simulation.
+> A truck that tumbles convincingly down a hillside in sync across eight
+> browsers is not achievable here, and chasing it would cost the phases that
+> make the game playable.
+
 **LB8 — Lag compensation rewinds entities, not players.**
 The rewind must be able to restore a shooter standing on a moving platform, not
 only a player standing on the map.
