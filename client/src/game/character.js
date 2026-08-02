@@ -37,10 +37,11 @@ export function createCharacter({ model, clips, teamColor }) {
     object.material = object.material.clone()
     if (teamColor !== undefined) object.material.color.setHex(teamColor)
 
-    // The pipeline emits the head as its own mesh named "Head" (see
-    // process-character.mjs). Moving it to its own layer lets the first-person
-    // camera skip it while the shadow camera still renders it.
-    if (object.name === 'Head') {
+    // Identified by extras, never by name. The skeleton contains a bone called
+    // "Head", so GLTFLoader renames the head mesh to "Head_1" to avoid the
+    // collision — a name lookup finds nothing and the head stays visible in
+    // first person, which is exactly the bug this replaced.
+    if (object.userData?.cedarPart === 'head') {
       headMesh = object
       object.layers.set(HEAD_LAYER)
     }

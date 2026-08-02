@@ -72,6 +72,10 @@ export function createPlayer({ physics, tuning, spawn }) {
     state,
     fixedStep,
     interpolatedPosition,
+    /** The player's own collider, so casts can be told to ignore it. */
+    get collider() {
+      return character.collider
+    },
     get height() {
       return height
     },

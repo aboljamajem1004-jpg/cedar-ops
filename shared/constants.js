@@ -138,6 +138,43 @@ export const MOVEMENT = {
   GROUND_STICK: 2.0, // downward pull while grounded, m/s — keeps the capsule on slopes and stairs
 }
 
+/**
+ * Camera. Same URL override mechanism as MOVEMENT: `?TP_DISTANCE=4`.
+ *
+ * Third person uses a spring arm — the camera sits behind and to the right of
+ * the head, but a wall between the two would put the view inside geometry, so
+ * each frame it casts toward the ideal spot and pulls in to the first hit.
+ */
+export const CAMERA = {
+  FOV: 75, // vertical field of view, degrees
+  NEAR: 0.1, // near clip plane, m — closer than this is not drawn
+  FAR: 500, // far clip plane, m
+  TP_DISTANCE: 2.6, // how far behind the head the third-person camera sits, m
+  TP_SHOULDER: 0.55, // offset to the right, m — over-the-shoulder framing
+  TP_HEIGHT: 0.15, // offset above eye height, m
+  TP_MIN_DISTANCE: 0.5, // closest the spring arm may pull in before clipping the body, m
+  TP_COLLISION_PAD: 0.25, // gap kept between camera and any surface it hits, m
+  FP_FORWARD: 0.16, // eye offset ahead of the neck axis, m — see below
+}
+
+/**
+ * Animation. Thresholds are in metres per second and compare against the
+ * player's horizontal speed, which comes from the shared movement state — never
+ * from input, so remote players animate correctly with no extra networking.
+ */
+export const ANIMATION = {
+  IDLE_SPEED: 0.3, // below this the player is standing still
+  WALK_SPEED: 4.0, // above this, switch from the walk clip to the jog clip
+  SPRINT_SPEED: 7.5, // above this, switch to the sprint clip
+  BLEND_TIME: 0.18, // crossfade duration between clips, seconds
+  CLIP_WALK_SPEED: 1.4, // metres per second the walk clip was authored at
+  CLIP_JOG_SPEED: 3.4, // same for the jog clip
+  CLIP_SPRINT_SPEED: 5.5, // same for the sprint clip
+  CLIP_CROUCH_SPEED: 1.1, // same for the crouch-walk clip
+  TIMESCALE_MIN: 0.6, // clamp on playback rate so clips never crawl
+  TIMESCALE_MAX: 1.8, // or run comically fast
+}
+
 // --- rendering --------------------------------------------------------------
 
 /**

@@ -1,4 +1,4 @@
-import { MOVEMENT } from '../../../shared/constants.js'
+import { MOVEMENT, CAMERA, ANIMATION } from '../../../shared/constants.js'
 
 /**
  * Movement tuning with URL overrides, so numbers can be changed live without a
@@ -17,25 +17,36 @@ export function resolveTuning() {
   const enabled = import.meta.env.DEV || params.get('tune') === '1'
 
   const tuning = { ...MOVEMENT }
+  const camera = { ...CAMERA }
+  const animation = { ...ANIMATION }
   /** @type {Record<string, number>} */
   const overrides = {}
 
-  if (!enabled) return { tuning, overrides, enabled }
+  if (!enabled) return { tuning, camera, animation, overrides, enabled }
 
-  const byLowerCase = new Map(Object.keys(MOVEMENT).map((key) => [key.toLowerCase(), key]))
+  // One override mechanism across all three tables. Keys are unique between
+  // them, so a single lookup keeps the URL simple: ?SPEED_WALK=8&TP_DISTANCE=4
+  const targets = [tuning, camera, animation]
+  const byLowerCase = new Map(
+    targets.flatMap((table) => Object.keys(table).map((key) => [key.toLowerCase(), table]))
+  )
+  const canonical = new Map(
+    targets.flatMap((table) => Object.keys(table).map((key) => [key.toLowerCase(), key]))
+  )
 
   for (const [rawKey, rawValue] of params) {
-    const key = byLowerCase.get(rawKey.toLowerCase())
-    if (!key) continue
+    const table = byLowerCase.get(rawKey.toLowerCase())
+    if (!table) continue
 
     const value = Number(rawValue)
     if (!Number.isFinite(value)) continue
 
-    tuning[key] = value
+    const key = canonical.get(rawKey.toLowerCase())
+    table[key] = value
     overrides[key] = value
   }
 
-  return { tuning, overrides, enabled }
+  return { tuning, camera, animation, overrides, enabled }
 }
 
 /**

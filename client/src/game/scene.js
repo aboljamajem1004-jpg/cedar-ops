@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { createGrid } from './grid.js'
+import { HEAD_LAYER } from './character.js'
 
 const SKY = 0x8fb6d6
 const GROUND = 0x3f4a3a
@@ -37,6 +38,10 @@ export function createScene(quality) {
   sun.shadow.camera.bottom = -extent
   sun.shadow.bias = -0.0005
   sun.castShadow = quality.shadows
+  // The head lives on its own layer so the first-person camera can skip it.
+  // The shadow camera must still render that layer, or hiding the head from the
+  // view would also delete it from the player's own shadow.
+  sun.shadow.camera.layers.enable(HEAD_LAYER)
   scene.add(sun)
 
   // --- ground ---------------------------------------------------------------

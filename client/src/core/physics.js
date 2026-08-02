@@ -121,6 +121,24 @@ export async function createPhysics() {
       }
     },
 
+    /**
+     * Distance to the first solid surface along a ray, or null if nothing is
+     * hit within maxDistance.
+     *
+     * Used by the third-person spring arm to keep the camera out of walls.
+     *
+     * @param {{x:number,y:number,z:number}} origin
+     * @param {{x:number,y:number,z:number}} direction must be normalised
+     * @param {number} maxDistance
+     * @param {any} [exclude] collider to ignore, normally the player's own capsule
+     * @returns {number|null}
+     */
+    castRay(origin, direction, maxDistance, exclude) {
+      const ray = new RAPIER.Ray(origin, direction)
+      const hit = world.castRay(ray, maxDistance, true, undefined, undefined, exclude)
+      return hit ? hit.timeOfImpact : null
+    },
+
     step() {
       world.step()
     },

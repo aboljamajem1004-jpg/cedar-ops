@@ -112,5 +112,18 @@ export function createInput(canvas, tuning = MOVEMENT) {
     get lastRelease() {
       return lastRelease
     },
+    /**
+     * Set look direction directly.
+     *
+     * Pointer lock cannot be granted programmatically, so this is the only way
+     * for a test to aim the camera. Also useful for demos and replays later.
+     *
+     * @param {number} nextYaw
+     * @param {number} nextPitch
+     */
+    setLook(nextYaw, nextPitch) {
+      yaw = nextYaw
+      pitch = Math.max(-pitchLimit, Math.min(pitchLimit, nextPitch))
+    },
   }
 }

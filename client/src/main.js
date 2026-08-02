@@ -6,7 +6,9 @@ import { createAutoScaler } from './core/autoscale.js'
 import { createPhysics } from './core/physics.js'
 import { createInput } from './core/input.js'
 import { createPlayer } from './game/player.js'
-import { createFirstPersonCamera } from './game/camera-fp.js'
+import { createCameraRig } from './game/camera-rig.js'
+import { createCharacter, HEAD_LAYER } from './game/character.js'
+import { createAnimationState } from './game/animation-state.js'
 import { createBlockout } from './game/blockout.js'
 import { resolveTuning, resolveSpawn } from './core/tuning.js'
 import { createAssets } from './core/assets.js'
@@ -40,12 +42,10 @@ const mobile = isMobile()
 let level = resolveLevel(mobile)
 let quality = settingsFor(level, mobile)
 
-const { tuning, overrides } = resolveTuning()
+const { tuning, camera: cameraTuning, animation: animationTuning, overrides } = resolveTuning()
 
 const { renderer, isWebGL2, msaaSamples, resize, setPixelRatio } = createRenderer(canvas, quality)
 const { scene, setGridFade, setShadows } = createScene(quality)
-const view = createFirstPersonCamera(tuning)
-const camera = view.camera
 
 const overlay = createDebugOverlay({
   renderer,
@@ -55,9 +55,6 @@ const overlay = createDebugOverlay({
   onCycleQuality: () => applyQuality(nextLevel(level), true),
 })
 const debug = overlay.debug
-
-resize(camera)
-window.addEventListener('resize', () => resize(camera))
 
 const autoScaler = createAutoScaler({
   mobile,
@@ -101,10 +98,59 @@ const player = createPlayer({
   spawn: resolveSpawn({ x: 0, y: tuning.SPAWN_HEIGHT, z: 8 }),
 })
 
+// The rig needs physics for the third-person spring arm's ray cast, so it is
+// built after the world exists rather than alongside the renderer.
+const view = createCameraRig({
+  tuning,
+  camera: cameraTuning,
+  physics,
+  onModeChange: (next) => {
+    debug.cameraMode = next
+    overlay.log(`camera: ${next} person`)
+  },
+})
+const camera = view.camera
+
+resize(camera)
+window.addEventListener('resize', () => resize(camera))
+
+// Look control for tests and demos: pointer lock cannot be granted
+// programmatically, so there is no other way to aim the camera from a script.
+debug.setPitch = (pitch) => input.setLook(input.yaw, pitch)
+debug.setLook = (yaw, pitch) => input.setLook(yaw, pitch)
+
+const assets = createAssets(renderer)
+
+// --- local player body ------------------------------------------------------
+// Visible in third person, and in first person from the neck down — the head is
+// on its own layer that the first-person camera skips.
+/** @type {{ update: (state: any, dt: number) => void }|null} */
+let animator = null
+/** @type {any} */
+let body = null
+
+loading.step('loading character…', 0.5)
+const characterModel = await assets
+  .loadModel('assets/models/character-male.glb')
+  .catch((error) => {
+    loading.fail('Could not load the character model', error)
+    throw error
+  })
+const animationFile = await assets.loadModel('assets/models/animations.glb').catch((error) => {
+  loading.fail('Could not load animations', error)
+  throw error
+})
+
+body = createCharacter({ model: characterModel, clips: animationFile.animations })
+scene.add(body.root)
+animator = createAnimationState({ character: body, animation: animationTuning })
+if (animator.missingClips.length) {
+  overlay.log(`missing clips: ${animator.missingClips.join(', ')}`)
+}
+
 // --- stress test (§5.1) ---------------------------------------------------
 // ?stress=8 spawns characters with PBR materials under an HDRI, so the budget
 // can be measured against the honest worst case instead of guessed at.
-const assets = createAssets(renderer)
 const stressCount = Number(new URLSearchParams(location.search).get('stress') || 0)
 /** @type {{ update: (dt: number) => void }|null} */
 let stress = null
@@ -195,12 +241,32 @@ startLoop({
   render(dt, alpha) {
     stress?.update(dt)
 
+    const position = player.interpolatedPosition(alpha)
+
+    // The body faces where the player looks, and stands at their feet.
+    if (body) {
+      body.root.position.set(position.x, position.y, position.z)
+      // Models face +Z; the camera looks down -Z at yaw 0, so the mesh needs a
+      // half turn to face the same way.
+      body.root.rotation.y = input.yaw + Math.PI
+    }
+
+    animator?.update(
+      {
+        speed: player.speed,
+        onGround: player.state.onGround,
+        crouching: player.state.crouching,
+      },
+      dt
+    )
+
     view.update({
-      position: player.interpolatedPosition(alpha),
+      position,
       yaw: input.yaw,
       pitch: input.pitch,
       crouching: player.state.crouching,
       dt,
+      playerCollider: player.collider,
     })
 
     renderer.render(scene, camera)
@@ -222,6 +288,12 @@ startLoop({
       locked: input.locked,
       buttons: input.buttons,
     }
+    debug.cameraPosition = { x: camera.position.x, y: camera.position.y, z: camera.position.z }
+    debug.cameraMode = view.mode
+    debug.headHidden = !camera.layers.isEnabled(HEAD_LAYER)
+    debug.hasHeadMesh = Boolean(body?.headMesh)
+    debug.meshNames = body ? body.meshes.map((m) => m.name) : []
+    debug.animation = animator?.current ?? null
 
     overlay.update()
     autoScaler.update(dt * 1000)

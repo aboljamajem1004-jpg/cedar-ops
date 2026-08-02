@@ -187,11 +187,19 @@ function splitHead(document) {
       )
 
       // The head goes into its own mesh on its own node, not a second primitive
-      // of the same mesh. three's GLTFLoader copies mesh-level extras into
+      // of the same mesh: three's GLTFLoader copies mesh-level extras into
       // userData but not primitive-level ones, so a tagged primitive would
-      // arrive unidentifiable — whereas a named node is trivial to find.
-      const headMesh = document.createMesh(HEAD_MESH_NAME).addPrimitive(headPrimitive)
-      mesh.setName(BODY_MESH_NAME)
+      // arrive unidentifiable.
+      //
+      // Identification is by extras, NOT by name. The skeleton already contains
+      // a bone called "Head", and GLTFLoader renames colliding objects — a mesh
+      // named "Head" arrives as "Head_1" and a name lookup silently finds
+      // nothing, leaving the head visible in first person.
+      const headMesh = document
+        .createMesh(HEAD_MESH_NAME)
+        .addPrimitive(headPrimitive)
+        .setExtras({ cedarPart: 'head' })
+      mesh.setName(BODY_MESH_NAME).setExtras({ ...mesh.getExtras(), cedarPart: 'body' })
 
       for (const node of root.listNodes()) {
         if (node.getMesh() !== mesh) continue
@@ -200,6 +208,7 @@ function splitHead(document) {
           .createNode(HEAD_MESH_NAME)
           .setMesh(headMesh)
           .setSkin(node.getSkin())
+          .setExtras({ cedarPart: 'head' })
 
         const parent = node.getParentNode()
         if (parent) parent.addChild(headNode)
