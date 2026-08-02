@@ -57,7 +57,7 @@ A **free, open-source, browser-based 3D multiplayer shooter**.
 - Runs in the browser on **desktop and mobile phones**, no install, no accounts
 - **Lightweight**: must run on integrated GPUs and mid-range Android phones
 - Client hosted free on **Cloudflare Pages**; game server self-hosted on my **Windows RDP**
-- Modern stylized **low-poly** art direction (not realistic)
+- **Stylized-realistic** art direction — the reference points are Valorant and The Finals: correct human proportions, strong silhouettes, clean PBR materials, stylized skin and hair. Not photoreal, not low-poly. Weapons go as close to photoreal as the budget allows, and they can, because they are small, rigid, and carried by normal maps.
 
 ### Non-goals (do not build these)
 - No battle royale, no 100-player maps, no open world
@@ -65,6 +65,14 @@ A **free, open-source, browser-based 3D multiplayer shooter**.
 - No matchmaking service — join by **room code** only
 - No monetization, no ads, no anti-cheat beyond server authority + sanity checks
 - No Unity / Unreal / WebGPU. Plain Three.js + WebGL2.
+
+**Out of reach — do not propose these.** Not achievable in a browser with 8
+players on WebGL2, regardless of effort: photoreal skin (subsurface scattering),
+real-time global illumination, cloth or hair simulation, alpha-card hair across 8
+characters on mobile (overdraw on tile-based GPUs), screen-space reflections,
+volumetric lighting, high-fidelity facial animation at scale, 4K textures.
+Realistic *bodies* are not on the table; stylized-realistic bodies are. Realistic
+*weapons* are.
 
 ---
 
@@ -154,25 +162,78 @@ Sanity checks on server: max speed, max fire rate, position delta per tick. Reje
 
 ## 5. Performance budget (enforce these — check every phase)
 
+> **These numbers are ESTIMATES, not measurements.** They were derived from
+> hardware reasoning, not from this game on real devices. They get corrected
+> with real Samsung A56 data after the Phase 2 stress test. Until that happens,
+> treat any number here as provisional.
+
+**Frame time is the real budget.** Everything below is a proxy for it.
+
 | Metric | Desktop | Mobile |
 |---|---|---|
+| **Frame time** | 16.6 ms | 33.3 ms |
 | FPS target | 60 | 30 |
-| Draw calls | < 150 | < 100 |
-| Triangles on screen | < 300k | < 150k |
+| Draw calls | < 300 | < 150 |
+| Triangles on screen | < 1M | < 400k |
+| Texture memory | < 400 MB | < 200 MB |
+| Full-screen post passes | ≤ 3 | ≤ 1 |
+| Shadow-casting lights | 1 | 0 (baked + blob shadows) |
+| Skinned meshes | ≤ 16 | ≤ 10 |
 | Texture size | ≤ 2048 | ≤ 1024 |
 | Total JS bundle (gzip) | < 2 MB | |
 | Total assets | < 15 MB | |
 | Server tick time | < 5 ms with 8 players | |
 
+**What actually costs frames, in order.** Triangles are sixth. Doubling geometry
+is close to free; one badly chosen alpha-blended layer across 8 characters can
+cost 30% of the frame.
+
+1. Draw calls — JS→GL overhead on a thread shared with physics and netcode
+2. Fill rate and overdraw — mobile GPUs are tile-based, transparency is brutal
+3. Texture bandwidth and memory
+4. Full-screen post-processing passes
+5. Shadow passes
+6. Triangles
+
 Techniques that are required, not optional:
 - Baked lighting where possible; **one** real-time shadow-casting light (sun) max, disabled on mobile
+- **KTX2 / Basis Universal for every texture — mandatory, not optional.** See §5.1.
+- PBR metalness/roughness with an HDRI environment map, and ACES tone mapping — this is most of what reads as "modern", and tone mapping is free
+- Normal maps instead of geometry for surface detail, especially on weapons
+- Baked ambient occlusion in the texture rather than an SSAO pass
 - `InstancedMesh` for every repeated prop
 - One texture atlas per material group → minimal draw calls
 - Object pooling for bullets, tracers, particles, decals, audio nodes
 - Frustum culling on, plus manual distance culling for props
-- `renderer.setPixelRatio()` clamped: desktop ≤ 1.5, mobile ≤ 1.0, plus a render-scale slider (0.5–1.0)
+- `renderer.setPixelRatio()` clamped: desktop ≤ 1.5, mobile ≤ 1.25, plus a render-scale slider (0.5–1.0)
 - All models compressed with Draco or Meshopt before commit
 - Show an FPS + draw-call + ping overlay from phase 0 onward (toggle with F3)
+
+### 5.1 Permanent constraints
+
+These are not per-phase decisions. They hold for the life of the project.
+
+**Thermal throttling — design for the throttled state, not the first minute.**
+A phone holds its peak for roughly two minutes and then loses 30–40% as it heats
+up. A 10-minute match is played almost entirely in the throttled state, so that
+is the state the budget must be met in. Never accept a performance result
+measured in the first minute of a session. The auto-scaler exists for this.
+
+**Mobile memory ceiling — KTX2 is mandatory for all textures.**
+Mobile browsers kill tabs at roughly 1–1.5 GB, and texture memory is what gets
+us there, not geometry. An uncompressed 2048² RGBA texture costs ~16 MB of GPU
+memory; the same texture as KTX2/Basis costs ~4 MB, transcoded to ASTC on mobile
+and BC on desktop. Every texture ships as KTX2. No PNG or JPEG at runtime, ever.
+
+**Drone aerial camera — full-screen only, never picture-in-picture, and the map
+must be built for it from Phase 3 onward.**
+Picture-in-picture means a second full scene render per frame, up to 2× the GPU
+cost. A full-screen mode switch is nearly free — that is the only acceptable
+form. The harder problem is that occlusion culling carries the frame at ground
+level and collapses from the air: at 40 m up the whole map is visible at once and
+draw calls spike. The map's LOD and distance-culling strategy must be designed
+for aerial viewing from Phase 3, with culling distances tuned separately per
+camera. Retrofitting this later means rebuilding the map's rendering strategy.
 
 ---
 
@@ -203,8 +264,13 @@ Rapier physics world, capsule character controller, WASD + mouse look (Pointer L
 **Done when**: movement feels solid on a test blockout, no clipping through walls.
 
 ### Phase 2 — Character + third person
-Load a rigged .glb character, Mixamo animation set (idle/walk/run/jump/crouch), animation blending, `V` toggle, third-person spring-arm camera with collision, hide head mesh in FP.
-**Done when**: both cameras look right and animations don't pop.
+Load a rigged .glb character, animation set (idle/walk/run/jump/crouch), animation blending, `V` toggle, third-person spring-arm camera with collision, hide head mesh in FP.
+
+**Stress test, run before any integration code**: 8 characters at LOD0 with PBR materials and an HDRI, measured on the Samsung A56 — including after five minutes of continuous running, so the number recorded is the throttled one. The §5 budget stays marked as estimates until this produces real data.
+
+Animation is driven by simulation state (`speed`, `onGround`, `crouching` from `shared/movement.js`), never by input. Remote players arrive over the network as position and velocity with no key presses attached — animation keyed to input would leave them sliding around in a permanent idle pose.
+
+**Done when**: both cameras look right, animations don't pop, and the stress test numbers are recorded in §5.
 
 ### Phase 3 — Map v1
 Blockout the map (code-generated or modeled), collision, spawn points, skybox, fog, baked-style lighting, atlas materials. Verify performance budget.
@@ -236,6 +302,15 @@ Client on **Cloudflare Pages**, which builds from the repo on every push to `mai
 
 **Base path rule**: never hardcode a base path. Vite, the dev server and the verify harness all read `CEDAR_BASE`, defaulting to `/`. A host that serves from a subpath sets that variable; nothing else changes.
 
+### Phase 10 — Drones / UAVs (planned, not scoped)
+Airborne drone entities, both as a gameplay element inside TDM and as a possible separate mode. Placeholder so the constraints below are designed for, not retrofitted.
+
+Known costs, from the §5 analysis:
+- **Mesh and bandwidth are negligible** — 1–3k triangles, roughly 12 bytes per drone per snapshot quantized. Eight drones at 20 Hz is about 2 KB/s against a 30 KB/s budget.
+- **3D flight movement** is a second function in `shared/movement.js`, subject to the same client/server sharing rule as ground movement.
+- **Lag compensation is genuinely hard.** Small, fast, airborne targets are the worst case for fair hit registration at 100 ms ping. Budget real design time.
+- **The aerial camera is the expensive part** — see §5.1. Full-screen only, and the map's LOD/culling strategy must already account for it from Phase 3.
+
 ---
 
 ## 8. Assets — sources and rules
@@ -247,14 +322,15 @@ All assets must be **CC0 or clearly free for commercial/open-source use**. Recor
 | Props, weapons, environment kits | kenney.nl/assets (CC0) |
 | Characters, nature, modular kits | quaternius.com (CC0) |
 | Search across free 3D | poly.pizza |
-| Character animations | mixamo.com (free Adobe account) |
+| Character animations | quaternius.com Universal Animation Library (CC0, ships as GLB, same universal humanoid rig as Universal Base Characters — no retargeting). mixamo.com (free Adobe account) is the fallback, not the default. |
 | Sound effects | freesound.org (check license), kenney.nl audio packs |
 | HDRIs / skies | polyhaven.com (CC0) |
 
 Rules:
 - Only `.glb`, never `.fbx`/`.obj` at runtime
 - Compress every model with `gltf-transform` (Draco/Meshopt) before committing
-- Textures ≤ 1024 for props, ≤ 2048 for the atlas, WebP where possible
+- Textures ≤ 1024 for props, ≤ 2048 for the atlas
+- **Every texture ships as KTX2 / Basis Universal — mandatory (§5.1).** No PNG, JPEG or WebP at runtime. WebP is smaller to download but decodes to uncompressed RGBA in GPU memory, which is the resource that actually runs out on a phone.
 - Never commit raw source files (`.blend`, `.fbx`) to the repo — keep them out via `.gitignore`
 
 When a phase needs assets, **tell me exactly which pack to download and where to place the files**, then wait — don't invent placeholder geometry and move on unless I say so.
