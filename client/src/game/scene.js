@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { isMobile } from '../core/renderer.js'
+import { createGrid } from './grid.js'
 
 const SKY = 0x8fb6d6
 const GROUND = 0x3f4a3a
@@ -11,9 +11,10 @@ const GROUND = 0x3f4a3a
  * nothing with a single object, and separated objects make frustum and
  * distance culling visible once they are added in Phase 3.
  *
- * @returns {{ scene: THREE.Scene, camera: THREE.PerspectiveCamera, update: (dt: number) => void }}
+ * @param {{ shadows: boolean, grid: boolean, gridFadeStart: number, gridFadeEnd: number }} quality
+ * @returns {{ scene: THREE.Scene, camera: THREE.PerspectiveCamera, update: (dt: number) => void, setGridFade: (start: number, end: number) => void }}
  */
-export function createScene() {
+export function createScene(quality) {
   const scene = new THREE.Scene()
   scene.background = new THREE.Color(SKY)
   // Fog hides the ground plane's far edge, so the world reads as open.
@@ -30,7 +31,7 @@ export function createScene() {
 
   const sun = new THREE.DirectionalLight(0xfff3e0, 2.2)
   sun.position.set(30, 45, 20)
-  if (!isMobile()) {
+  if (quality.shadows) {
     sun.castShadow = true
     sun.shadow.mapSize.set(1024, 1024)
     sun.shadow.camera.near = 1
@@ -53,11 +54,14 @@ export function createScene() {
   ground.receiveShadow = true
   scene.add(ground)
 
-  const grid = new THREE.GridHelper(200, 100, 0x6d7f8f, 0x4b5a66)
-  grid.position.y = 0.01 // lift off the plane to avoid z-fighting
-  grid.material.transparent = true
-  grid.material.opacity = 0.55
-  scene.add(grid)
+  const grid = quality.grid
+    ? createGrid({
+        fadeStart: quality.gridFadeStart,
+        fadeEnd: quality.gridFadeEnd,
+        fog: scene.fog,
+      })
+    : null
+  if (grid) scene.add(grid)
 
   // --- cubes ----------------------------------------------------------------
   const cubeGeo = new THREE.BoxGeometry(2, 2, 2)
@@ -89,5 +93,10 @@ export function createScene() {
     }
   }
 
-  return { scene, camera, update }
+  /** @param {number} start @param {number} end */
+  function setGridFade(start, end) {
+    grid?.userData.setFade(start, end)
+  }
+
+  return { scene, camera, update, setGridFade }
 }

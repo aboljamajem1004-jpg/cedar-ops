@@ -13,7 +13,8 @@
     "dev:client": "npm run dev",
     "build": "vite build --config client/vite.config.js",
     "preview": "vite preview --config client/vite.config.js --host 127.0.0.1 --port 4173 --strictPort",
-    "verify": "npm run build && playwright test --config tools/verify/playwright.config.js"
+    "verify": "npm run build && playwright test --config tools/verify/playwright.config.js",
+    "bench": "npm run build && playwright test --config tools/verify/bench.config.js"
   },
   "dependencies": {
     "three": "0.185.1"

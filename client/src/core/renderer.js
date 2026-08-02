@@ -1,8 +1,4 @@
 import * as THREE from 'three'
-import {
-  PIXEL_RATIO_MAX_DESKTOP,
-  PIXEL_RATIO_MAX_MOBILE,
-} from '../../../shared/constants.js'
 
 /**
  * Rough mobile check. Used only to pick render settings, never for gameplay.
@@ -17,29 +13,32 @@ export function isMobile() {
 /**
  * Create the WebGL2 renderer and keep it sized to the canvas.
  *
+ * `antialias` is a context creation attribute: it cannot be toggled afterwards,
+ * which is why switching MSAA on or off requires a page reload.
+ *
  * @param {HTMLCanvasElement} canvas
- * @returns {{ renderer: THREE.WebGLRenderer, isWebGL2: boolean, resize: (camera: THREE.PerspectiveCamera) => void }}
+ * @param {{ msaa: boolean, shadows: boolean, pixelRatio: number }} quality
+ * @returns {{ renderer: THREE.WebGLRenderer, isWebGL2: boolean, msaaSamples: number, resize: (camera: THREE.PerspectiveCamera) => void, setPixelRatio: (ratio: number, camera: THREE.PerspectiveCamera) => void }}
  */
-export function createRenderer(canvas) {
-  const mobile = isMobile()
-
+export function createRenderer(canvas, quality) {
   const renderer = new THREE.WebGLRenderer({
     canvas,
-    antialias: !mobile,
+    antialias: quality.msaa,
     powerPreference: 'high-performance',
     stencil: false,
   })
 
   renderer.outputColorSpace = THREE.SRGBColorSpace
-  // One real-time shadow-casting light maximum, and none on mobile (§5).
-  renderer.shadowMap.enabled = !mobile
+  // One real-time shadow-casting light maximum (§5).
+  renderer.shadowMap.enabled = quality.shadows
   // PCFSoftShadowMap is deprecated as of three 0.185 and falls back to PCF anyway.
   renderer.shadowMap.type = THREE.PCFShadowMap
 
-  const maxRatio = mobile ? PIXEL_RATIO_MAX_MOBILE : PIXEL_RATIO_MAX_DESKTOP
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxRatio))
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality.pixelRatio))
 
   const gl = renderer.getContext()
+  // What the driver actually granted. Asking for MSAA does not guarantee it.
+  const msaaSamples = quality.msaa ? gl.getParameter(gl.SAMPLES) || 0 : 0
   const isWebGL2 =
     typeof WebGL2RenderingContext !== 'undefined' &&
     gl instanceof WebGL2RenderingContext
@@ -53,7 +52,17 @@ export function createRenderer(canvas) {
     camera.updateProjectionMatrix()
   }
 
-  return { renderer, isWebGL2, resize }
+  /**
+   * Pixel ratio can change at runtime — it only resizes the drawing buffer.
+   * @param {number} ratio
+   * @param {THREE.PerspectiveCamera} camera
+   */
+  function setPixelRatio(ratio, camera) {
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, ratio))
+    resize(camera)
+  }
+
+  return { renderer, isWebGL2, msaaSamples, resize, setPixelRatio }
 }
 
 /**

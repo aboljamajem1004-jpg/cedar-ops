@@ -38,6 +38,42 @@ Output lands in `tools/verify/out/` — `phase0.png` and `report.json`.
 
 It honours `CEDAR_BASE`, so it tests whichever base path you build with.
 
+## Quality settings
+
+Three presets, defined in `shared/constants.js`. Desktop starts on **high**,
+mobile on **medium**. Press **F4** to cycle; the choice is remembered.
+
+| Preset | Pixel ratio | MSAA | Shadows |
+| --- | --- | --- | --- |
+| low | 1.0 | off | off |
+| medium | 1.25 | on | off |
+| high | 1.5 (1.25 on mobile) | on | on |
+
+MSAA and shadows are fixed when the WebGL context and materials are created, so
+switching those reloads the page. Pixel ratio and grid fade apply instantly.
+
+### Measuring one setting at a time
+
+Presets move several settings at once, so they cannot tell you what any single
+one costs. URL parameters override individual settings for that purpose:
+
+| Parameter | Effect |
+| --- | --- |
+| `?q=low\|medium\|high` | pin a preset |
+| `?pr=1.25` | pixel ratio |
+| `?msaa=0\|1` | MSAA |
+| `?shadows=0\|1` | shadow map |
+| `?grid=0\|1` | ground grid |
+
+Compare with F3 open and read **p50** (typical) and **p95** (worst) frame time —
+they are far more stable than the FPS counter. Example: `?pr=1&msaa=0` versus
+`?pr=1&msaa=1` isolates the cost of MSAA and nothing else.
+
+`npm run bench` runs that matrix automatically, but **only under headless
+software rendering**, where the differences are smaller than the measurement
+noise. It reports "below noise floor" rather than inventing a number. Real
+per-setting costs come from a real device using the parameters above.
+
 The FPS number it prints comes from software rendering (SwiftShader) in headless
 Chrome. It proves the scene renders without erroring. It is **not** a
 performance measurement — those come from a real device.

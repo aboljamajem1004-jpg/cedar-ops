@@ -1,17 +1,56 @@
-import { createRenderer, samplePixels } from './core/renderer.js'
+import { createRenderer, samplePixels, isMobile } from './core/renderer.js'
 import { startLoop } from './core/loop.js'
 import { createScene } from './game/scene.js'
 import { createDebugOverlay } from './ui/debug-overlay.js'
+import {
+  resolveLevel,
+  settingsFor,
+  storeLevel,
+  nextLevel,
+  requiresReload,
+} from './core/quality.js'
 
 const canvas = /** @type {HTMLCanvasElement} */ (document.getElementById('game'))
 
-const { renderer, isWebGL2, resize } = createRenderer(canvas)
-const { scene, camera, update } = createScene()
-const overlay = createDebugOverlay({ renderer, isWebGL2 })
+const mobile = isMobile()
+let level = resolveLevel(mobile)
+const quality = settingsFor(level, mobile)
+
+const { renderer, isWebGL2, msaaSamples, resize, setPixelRatio } = createRenderer(canvas, quality)
+const { scene, camera, update, setGridFade } = createScene(quality)
+
+const overlay = createDebugOverlay({
+  renderer,
+  isWebGL2,
+  msaaSamples,
+  quality,
+  onCycleQuality: () => applyQuality(nextLevel(level)),
+})
 const debug = overlay.debug
 
 resize(camera)
 window.addEventListener('resize', () => resize(camera))
+
+/**
+ * Switch preset. Pixel ratio and grid fade are live; MSAA and shadows are baked
+ * into the WebGL context and the compiled materials, so those need a reload.
+ *
+ * @param {'low'|'medium'|'high'} next
+ */
+function applyQuality(next) {
+  const settings = settingsFor(next, mobile)
+  storeLevel(next)
+
+  if (requiresReload(quality, settings)) {
+    location.reload()
+    return
+  }
+
+  level = next
+  setPixelRatio(settings.pixelRatio, camera)
+  setGridFade(settings.gridFadeStart, settings.gridFadeEnd)
+  debug.quality = next
+}
 
 startLoop((dt) => {
   update(dt)

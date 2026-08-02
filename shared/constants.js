@@ -29,9 +29,51 @@ export const MAP_SIZE = 200
 
 // --- rendering --------------------------------------------------------------
 
-/** Device pixel ratio caps (CLAUDE.md §5). */
+/**
+ * Absolute device pixel ratio ceilings (CLAUDE.md §5).
+ *
+ * Mobile was raised from 1.0 to 1.25: at 1.0 the grid lines aliased badly on a
+ * high-DPI phone. 1.25 is the compromise being trialled — fill cost scales with
+ * the square of this number, so 1.25 costs ~56% more fragments than 1.0.
+ */
 export const PIXEL_RATIO_MAX_DESKTOP = 1.5
-export const PIXEL_RATIO_MAX_MOBILE = 1.0
+export const PIXEL_RATIO_MAX_MOBILE = 1.25
+/** Ratio used by the low preset on any device. */
+export const PIXEL_RATIO_LOW = 1.0
+
+/**
+ * Quality presets. `msaa` and `shadows` are baked into the WebGL context and
+ * the compiled materials, so changing either needs a page reload; pixel ratio
+ * and the grid fade distances apply live.
+ */
+export const QUALITY_LEVELS = /** @type {const} */ (['low', 'medium', 'high'])
+
+export const QUALITY = {
+  low: {
+    pixelRatio: PIXEL_RATIO_LOW,
+    msaa: false,
+    shadows: false,
+    gridFadeStart: 25,
+    gridFadeEnd: 60,
+  },
+  medium: {
+    pixelRatio: PIXEL_RATIO_MAX_MOBILE,
+    msaa: true,
+    shadows: false,
+    gridFadeStart: 40,
+    gridFadeEnd: 95,
+  },
+  high: {
+    pixelRatio: PIXEL_RATIO_MAX_DESKTOP,
+    msaa: true,
+    shadows: true,
+    gridFadeStart: 60,
+    gridFadeEnd: 150,
+  },
+}
+
+/** Starting preset per device class. */
+export const DEFAULT_QUALITY = { desktop: 'high', mobile: 'medium' }
 
 /**
  * Largest frame delta we will ever simulate, in seconds. Without this, a tab
