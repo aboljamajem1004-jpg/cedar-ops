@@ -72,8 +72,40 @@ export const QUALITY = {
   },
 }
 
-/** Starting preset per device class. */
-export const DEFAULT_QUALITY = { desktop: 'high', mobile: 'medium' }
+/**
+ * Starting preset per device class.
+ *
+ * Mobile is 'high': on a 60 Hz phone all three presets sit on the vsync
+ * interval with this scene, so there is no measured reason to ship a lower one,
+ * and high looks clearly better. The auto-scaler below exists because that
+ * headroom is unknown and will shrink as the map and players arrive.
+ */
+export const DEFAULT_QUALITY = { desktop: 'high', mobile: 'high' }
+
+/**
+ * Automatic downscaling.
+ *
+ * Only ever steps DOWN. An auto-upgrade would oscillate: raising quality
+ * increases frame time, which trips the downgrade, which raises it again.
+ * Recovering is the player's call, through the quality button.
+ *
+ * The thresholds sit well below each target rather than at it. A device that is
+ * merely vsync-locked at its target must never trip the scaler — 45 ms is about
+ * 22 fps, unambiguously below the 30 fps mobile target, and 28 ms is about
+ * 36 fps against a 60 fps desktop target.
+ */
+export const AUTOSCALE = {
+  /** Sustained p95 frame time that counts as struggling, in ms. */
+  p95BudgetMs: { desktop: 28, mobile: 45 },
+  /** How long the breach must persist before acting. */
+  sustainedMs: 3000,
+  /** Ignored after load — shader compilation makes early frames meaningless. */
+  graceMs: 5000,
+  /** Quiet period after a downgrade, so a step is given time to take effect. */
+  cooldownMs: 8000,
+  /** How often the check runs. */
+  checkIntervalMs: 500,
+}
 
 /**
  * Largest frame delta we will ever simulate, in seconds. Without this, a tab

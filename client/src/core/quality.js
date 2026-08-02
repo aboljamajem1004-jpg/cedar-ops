@@ -7,12 +7,15 @@ import {
 } from '../../../shared/constants.js'
 
 const STORAGE_KEY = 'cedar.quality'
+const MANUAL_KEY = 'cedar.quality.manual'
 
 /**
- * Settings that are fixed when the WebGL context is created or when materials
- * are compiled. Changing one of these needs a reload; everything else is live.
+ * Settings fixed when the WebGL context is created. `antialias` is a context
+ * attribute, so MSAA cannot change without rebuilding the context — a reload.
+ * Shadows used to be here too, but they are switched live now (materials get
+ * recompiled instead), which keeps the auto-scaler from reloading the page.
  */
-const NEEDS_RELOAD = ['msaa', 'shadows']
+const NEEDS_RELOAD = ['msaa']
 
 /**
  * Resolve the active preset: ?q= in the URL wins, then the stored choice, then
@@ -65,6 +68,26 @@ export function settingsFor(level, mobile) {
   if (params.has('grid')) settings.grid = params.get('grid') === '1'
 
   return settings
+}
+
+/**
+ * True when the player has chosen a preset themselves. That choice sticks
+ * across reloads and switches the auto-scaler off for good — an automatic
+ * system must never overrule an explicit decision.
+ *
+ * A ?q= pin counts as manual: asking for a specific preset is asking for it.
+ */
+export function isManual() {
+  if (new URLSearchParams(location.search).has('q')) return true
+  return read(MANUAL_KEY) === '1'
+}
+
+export function setManual() {
+  try {
+    localStorage.setItem(MANUAL_KEY, '1')
+  } catch {
+    // Storage blocked; the override still holds for this page's lifetime.
+  }
 }
 
 /** @param {'low'|'medium'|'high'} level */

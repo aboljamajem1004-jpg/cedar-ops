@@ -31,18 +31,18 @@ export function createScene(quality) {
 
   const sun = new THREE.DirectionalLight(0xfff3e0, 2.2)
   sun.position.set(30, 45, 20)
-  if (quality.shadows) {
-    sun.castShadow = true
-    sun.shadow.mapSize.set(1024, 1024)
-    sun.shadow.camera.near = 1
-    sun.shadow.camera.far = 120
-    const extent = 40
-    sun.shadow.camera.left = -extent
-    sun.shadow.camera.right = extent
-    sun.shadow.camera.top = extent
-    sun.shadow.camera.bottom = -extent
-    sun.shadow.bias = -0.0005
-  }
+  // Always configured, even when shadows are off, so they can be switched on
+  // later without rebuilding the light.
+  sun.shadow.mapSize.set(1024, 1024)
+  sun.shadow.camera.near = 1
+  sun.shadow.camera.far = 120
+  const extent = 40
+  sun.shadow.camera.left = -extent
+  sun.shadow.camera.right = extent
+  sun.shadow.camera.top = extent
+  sun.shadow.camera.bottom = -extent
+  sun.shadow.bias = -0.0005
+  sun.castShadow = quality.shadows
   scene.add(sun)
 
   // --- ground ---------------------------------------------------------------
@@ -98,5 +98,26 @@ export function createScene(quality) {
     grid?.userData.setFade(start, end)
   }
 
-  return { scene, camera, update, setGridFade }
+  /**
+   * Turn shadows on or off without a reload.
+   *
+   * Whether a material samples a shadow map is baked into its compiled shader,
+   * so every material has to be marked for recompilation. That costs a stall of
+   * a few frames — acceptable for an occasional quality change, which is why
+   * this is not something to call per frame.
+   *
+   * @param {boolean} enabled
+   */
+  function setShadows(enabled) {
+    sun.castShadow = enabled
+    scene.traverse((object) => {
+      const material = /** @type {any} */ (object).material
+      if (!material) return
+      for (const m of Array.isArray(material) ? material : [material]) {
+        m.needsUpdate = true
+      }
+    })
+  }
+
+  return { scene, camera, update, setGridFade, setShadows }
 }

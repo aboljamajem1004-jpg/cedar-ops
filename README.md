@@ -40,8 +40,8 @@ It honours `CEDAR_BASE`, so it tests whichever base path you build with.
 
 ## Quality settings
 
-Three presets, defined in `shared/constants.js`. Desktop starts on **high**,
-mobile on **medium**. The choice is remembered.
+Three presets, defined in `shared/constants.js`. Both desktop and mobile start
+on **high**. The choice is remembered.
 
 | Preset | Pixel ratio | MSAA | Shadows |
 | --- | --- | --- | --- |
@@ -52,6 +52,25 @@ mobile on **medium**. The choice is remembered.
 MSAA and shadows are fixed when the WebGL context and materials are created, so
 switching those reloads the page (carrying the new preset in the URL). Pixel
 ratio and grid fade apply instantly.
+
+### Automatic downscaling
+
+If p95 frame time stays above budget for 3 seconds, the preset steps down one
+level on its own. Thresholds live in `AUTOSCALE` in `shared/constants.js`.
+
+- It watches **p95**, not the average — a stream of occasional long frames reads
+  as fine on average but feels like stutter.
+- It only ever steps **down**. Auto-upgrading oscillates: more quality means
+  more frame time, which trips the downgrade, which raises it again.
+- The first 5 seconds after load are ignored (shader compilation), and there is
+  an 8-second cooldown after each step.
+- Every switch is written to the overlay log, so it is never silent.
+- Choosing a preset yourself, or pinning one with `?q=`, switches the scaler off
+  permanently and that sticks across reloads. Clear site data to re-enable it.
+
+An automatic downgrade never reloads the page: it applies pixel ratio, shadows
+and grid fade live, and defers only the MSAA part to the next load. A manual
+choice reloads immediately, because you asked for it and expect to see it.
 
 ### Opening the overlay
 

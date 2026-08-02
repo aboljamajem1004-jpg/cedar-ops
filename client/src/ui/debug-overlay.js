@@ -4,6 +4,8 @@ import { isMobile } from '../core/renderer.js'
 
 /** Frame times kept for percentile reporting — 4 seconds at 60 fps. */
 const FRAME_HISTORY = 240
+/** Recent events shown at the bottom of the overlay. */
+const LOG_LIMIT = 4
 
 /**
  * F3 debug overlay. F4 cycles the quality preset.
@@ -65,6 +67,20 @@ export function createDebugOverlay({ renderer, isWebGL2, msaaSamples, quality, o
       debug.pixelSample = null
       debug.pixelSampleRequested = true
     },
+  }
+
+  debug.log = /** @type {string[]} */ ([])
+
+  /**
+   * Record an event. Quality switches go through here so a change that happens
+   * on its own is visible rather than silent.
+   *
+   * @param {string} message
+   */
+  function log(message) {
+    debug.log.push(`${(performance.now() / 1000).toFixed(1)}s ${message}`)
+    if (debug.log.length > LOG_LIMIT) debug.log.shift()
+    if (!el.hidden) render()
   }
 
   window.__CEDAR_DEBUG__ = debug
@@ -178,10 +194,11 @@ export function createDebugOverlay({ renderer, isWebGL2, msaaSamples, quality, o
       `qual  ${debug.quality.toUpperCase()}`,
       `      msaa ${debug.msaa ? `${debug.msaaSamples}x` : 'off'}  shadow ${debug.shadows ? 'on' : 'off'}`,
       navigator.maxTouchPoints > 0 ? `[DBG] overlay  [QUAL] quality` : `[F3] overlay   [F4] quality`,
+      ...(debug.log.length ? ['', ...debug.log] : []),
     ].join('\n')
   }
 
-  return { update, debug, element: el }
+  return { update, debug, element: el, log }
 }
 
 const _size = new Vector2()
