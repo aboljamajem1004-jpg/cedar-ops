@@ -1,0 +1,25 @@
+{
+  "name": "cedar-ops",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Free, open-source, browser-based 3D multiplayer shooter",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "vite --config client/vite.config.js --host 127.0.0.1 --port 5173 --strictPort",
+    "dev:client": "npm run dev",
+    "build": "vite build --config client/vite.config.js",
+    "preview": "vite preview --config client/vite.config.js --host 127.0.0.1 --port 4173 --strictPort",
+    "verify": "npm run build && playwright test --config tools/verify/playwright.config.js"
+  },
+  "dependencies": {
+    "three": "0.185.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1",
+    "vite": "8.2.0"
+  }
+}

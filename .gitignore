@@ -1,0 +1,24 @@
+node_modules/
+client/dist/
+
+# verify harness output (screenshots, reports) — regenerated on every run
+tools/verify/out/*
+!tools/verify/out/.gitkeep
+test-results/
+playwright-report/
+
+# env
+.env
+.env.*
+!.env.example
+
+# raw asset sources must never be committed (see CLAUDE.md §8)
+*.blend
+*.blend[0-9]*
+*.fbx
+*.obj
+*.max
+*.psd
+
+.DS_Store
+Thumbs.db
