@@ -182,19 +182,33 @@ function splitHead(document) {
       headPrimitive.setIndices(
         document.createAccessor().setArray(IndexArrayType.from(headIndices))
       )
-
       primitive.setIndices(
         document.createAccessor().setArray(IndexArrayType.from(bodyIndices))
       )
 
-      mesh.addPrimitive(headPrimitive)
+      // The head goes into its own mesh on its own node, not a second primitive
+      // of the same mesh. three's GLTFLoader copies mesh-level extras into
+      // userData but not primitive-level ones, so a tagged primitive would
+      // arrive unidentifiable — whereas a named node is trivial to find.
+      const headMesh = document.createMesh(HEAD_MESH_NAME).addPrimitive(headPrimitive)
       mesh.setName(BODY_MESH_NAME)
-      headPrimitive.setExtras({ ...headPrimitive.getExtras(), cedarPart: 'head' })
-      primitive.setExtras({ ...primitive.getExtras(), cedarPart: 'body' })
+
+      for (const node of root.listNodes()) {
+        if (node.getMesh() !== mesh) continue
+
+        const headNode = document
+          .createNode(HEAD_MESH_NAME)
+          .setMesh(headMesh)
+          .setSkin(node.getSkin())
+
+        const parent = node.getParentNode()
+        if (parent) parent.addChild(headNode)
+        else for (const scene of root.listScenes()) scene.addChild(headNode)
+      }
 
       console.log(
-        `  split "${mesh.getName()}": head ${headIndices.length / 3} tris, ` +
-          `body ${bodyIndices.length / 3} tris`
+        `  split "${mesh.getName()}": head ${headIndices.length / 3} tris ` +
+          `(own mesh "${HEAD_MESH_NAME}"), body ${bodyIndices.length / 3} tris`
       )
     }
   }

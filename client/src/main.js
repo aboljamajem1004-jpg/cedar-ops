@@ -9,6 +9,8 @@ import { createPlayer } from './game/player.js'
 import { createFirstPersonCamera } from './game/camera-fp.js'
 import { createBlockout } from './game/blockout.js'
 import { resolveTuning } from './core/tuning.js'
+import { createAssets } from './core/assets.js'
+import { createStressScene, measureTextureMemory } from './game/stress.js'
 import {
   resolveLevel,
   settingsFor,
@@ -81,6 +83,30 @@ const player = createPlayer({
   spawn: { x: 0, y: tuning.SPAWN_HEIGHT, z: 8 },
 })
 
+// --- stress test (§5.1) ---------------------------------------------------
+// ?stress=8 spawns characters with PBR materials under an HDRI, so the budget
+// can be measured against the honest worst case instead of guessed at.
+const assets = createAssets(renderer)
+const stressCount = Number(new URLSearchParams(location.search).get('stress') || 0)
+/** @type {{ update: (dt: number) => void }|null} */
+let stress = null
+
+if (stressCount > 0) {
+  const environment = await assets.loadEnvironment('assets/hdri/sky_1k.hdr')
+  scene.environment = environment
+
+  stress = await createStressScene({ scene, assets, count: stressCount })
+
+  const memory = measureTextureMemory(scene)
+  debug.textureBytes = memory.bytes
+  debug.textureCount = memory.textures
+  debug.textureBreakdown = memory.breakdown
+  overlay.log(
+    `stress ${stressCount}: ${(memory.bytes / 1048576).toFixed(1)} MB textures ` +
+      `(${memory.compressed} ktx2, ${memory.uncompressed} raw)`
+  )
+}
+
 /**
  * Switch preset.
  *
@@ -132,6 +158,8 @@ startLoop({
   },
 
   render(dt, alpha) {
+    stress?.update(dt)
+
     view.update({
       position: player.interpolatedPosition(alpha),
       yaw: input.yaw,
@@ -157,6 +185,7 @@ startLoop({
       onGround: player.state.onGround,
       crouching: player.state.crouching,
       locked: input.locked,
+      buttons: input.buttons,
     }
 
     overlay.update()

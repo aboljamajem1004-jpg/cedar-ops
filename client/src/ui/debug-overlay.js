@@ -196,6 +196,9 @@ export function createDebugOverlay({ renderer, isWebGL2, msaaSamples, quality, o
       `draws ${pad(debug.drawCalls)}  / ${budget.drawCalls}`,
       `tris  ${pad(debug.triangles)}  / ${budget.triangles}`,
       `mem   ${debug.geometries} geo  ${debug.textures} tex`,
+      ...(debug.textureBytes
+        ? [`vram  ${(debug.textureBytes / 1048576).toFixed(1)} MB textures`]
+        : []),
       `res   ${debug.width}x${debug.height} @${debug.pixelRatio}`,
       `sim   ${debug.simHz} Hz  (target ${debug.tickHz})`,
       `net   ping ${debug.ping ?? '—'}`,

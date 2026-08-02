@@ -130,11 +130,13 @@ test('a ledge taller than the step height is not walked over', async ({ page }) 
 })
 
 test('a slope under the limit is walked up', async ({ page }) => {
-  await boot(page)
+  // Reaching the ramp is a ~20 m walk, and simulated time runs far behind
+  // wall-clock under a software rasteriser. Raising the walk speed via the
+  // tuning override covers that ground quickly — the claim under test is slope
+  // climbing, not how fast the player walks.
+  await boot(page, '&tune=1&SPEED_WALK=14')
 
-  // The 22 degree ramp sits at x = 9, well under SLOPE_LIMIT_DEG. Reaching the
-  // ramp is a ~20 m walk and then a climb, and simulated time runs well behind
-  // wall-clock under a software rasteriser, so this needs room.
+  // The 22 degree ramp sits at x = 9, well under SLOPE_LIMIT_DEG.
   await down(page, ['KeyD'])
   await until(page, 'p.x > 8.5', 45_000)
   await up(page, ['KeyD'])
@@ -147,7 +149,8 @@ test('a slope under the limit is walked up', async ({ page }) => {
 })
 
 test('a slope over the limit is not climbed', async ({ page }) => {
-  await boot(page)
+  // Same reasoning as the previous test: get to x = 17 quickly.
+  await boot(page, '&tune=1&SPEED_WALK=14')
 
   // The 65 degree ramp sits at x = 17, above SLOPE_LIMIT_DEG.
   await down(page, ['KeyD'])

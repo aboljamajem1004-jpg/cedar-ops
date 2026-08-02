@@ -174,8 +174,15 @@ export const MAX_FRAME_DT = 0.1
  */
 export const MAX_STEPS_PER_FRAME = 5
 
-/** Performance budget, enforced from Phase 0 onward (CLAUDE.md §5). */
+/**
+ * Performance budget (CLAUDE.md §5).
+ *
+ * Revised upward for triangles and downward in emphasis: triangles are sixth on
+ * the list of what actually costs frames, behind draw calls, fill rate, texture
+ * bandwidth, post passes and shadow passes. These are still ESTIMATES until the
+ * Phase 2 stress test replaces them with real device numbers.
+ */
 export const BUDGET = {
-  desktop: { fps: 60, drawCalls: 150, triangles: 300_000 },
-  mobile: { fps: 30, drawCalls: 100, triangles: 150_000 },
+  desktop: { fps: 60, drawCalls: 300, triangles: 1_000_000, textureBytes: 400 * 1024 * 1024 },
+  mobile: { fps: 30, drawCalls: 150, triangles: 400_000, textureBytes: 200 * 1024 * 1024 },
 }
