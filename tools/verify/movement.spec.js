@@ -104,13 +104,12 @@ test('walks up stairs without jumping', async ({ page }) => {
   await boot(page)
 
   await down(page, ['KeyW'])
-  // Five risers of 0.34. Reaching 1.0 means it climbed, and onGround the whole
-  // way means it walked rather than bounced.
-  await until(page, 'p.y > 1.0 && p.onGround')
+  // Five risers of 0.34. Reaching 1.0 while still grounded means it walked up
+  // rather than bounced up, which is the whole claim — so this wait IS the
+  // assertion. Re-reading after releasing would be a race: the player keeps
+  // walking during the round trip, off the top step and back down to y = 0.
+  await until(page, 'p.y > 1.0 && p.onGround', 45_000)
   await up(page, ['KeyW'])
-
-  const state = await playerState(page)
-  expect(state.y).toBeGreaterThan(1.0)
 })
 
 test('a ledge taller than the step height is not walked over', async ({ page }) => {
@@ -133,18 +132,18 @@ test('a ledge taller than the step height is not walked over', async ({ page }) 
 test('a slope under the limit is walked up', async ({ page }) => {
   await boot(page)
 
-  // The 22 degree ramp sits at x = 9, well under SLOPE_LIMIT_DEG.
+  // The 22 degree ramp sits at x = 9, well under SLOPE_LIMIT_DEG. Reaching the
+  // ramp is a ~20 m walk and then a climb, and simulated time runs well behind
+  // wall-clock under a software rasteriser, so this needs room.
   await down(page, ['KeyD'])
-  await until(page, 'p.x > 8.5')
+  await until(page, 'p.x > 8.5', 45_000)
   await up(page, ['KeyD'])
 
+  // Grounded at 1.5 m up the ramp means it was walked, not fallen onto. As
+  // above, the wait is the assertion — the far end drops off.
   await down(page, ['KeyW'])
-  await until(page, 'p.y > 1.5 && p.onGround')
+  await until(page, 'p.y > 1.5 && p.onGround', 60_000)
   await up(page, ['KeyW'])
-
-  const state = await playerState(page)
-  expect(state.y).toBeGreaterThan(1.5)
-  expect(state.onGround).toBe(true)
 })
 
 test('a slope over the limit is not climbed', async ({ page }) => {

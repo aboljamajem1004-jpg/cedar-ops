@@ -91,10 +91,17 @@ export function computeMovement(state, input, dt, t = MOVEMENT) {
   if (buttons & BTN.LEFT) wishX -= 1
   if (buttons & BTN.RIGHT) wishX += 1
 
+  // Rotate the wish vector into the camera's yaw frame.
+  //
+  // The camera looks down its local -Z, so at rotation.y = yaw its forward is
+  // (-sin, 0, -cos) and its right is (cos, 0, -sin). These two lines must be
+  // the rotation that maps local axes onto those; the mirrored version (sin
+  // terms negated) is a rotation by -yaw, which agrees at 0 and 180 degrees
+  // and inverts completely at +-90.
   const sin = Math.sin(yaw)
   const cos = Math.cos(yaw)
-  let dirX = wishX * cos - wishZ * sin
-  let dirZ = wishX * sin + wishZ * cos
+  let dirX = wishX * cos + wishZ * sin
+  let dirZ = -wishX * sin + wishZ * cos
 
   const wishLength = Math.sqrt(dirX * dirX + dirZ * dirZ)
   const hasInput = wishLength > 0
