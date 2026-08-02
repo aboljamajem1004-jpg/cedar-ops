@@ -278,14 +278,23 @@ Blockout the map (code-generated or modeled), collision, spawn points, skybox, f
 
 ### Phase 4 — Naive multiplayer
 geckos.io server + client, room codes, join/leave, players broadcast state, other players appear and move (no prediction yet, will look laggy — that's expected).
+
+**Build the generic entity system here, not later (§10 LB1).** A player is an entity with `type: player`. There is no players array to grow out of.
+
 **Done when**: two browsers on my LAN see each other move.
 
 ### Phase 5 — Real netcode
 Binary protocol, 30 Hz server sim, 20 Hz snapshots, client prediction + reconciliation, entity interpolation with 100 ms buffer, network debug panel (RTT, jitter, mis-predictions, bandwidth).
+
+**Load-bearing here (§10):** 16-bit entity ids and 8-bit type tags in the protocol (LB3), optional `parentId` in the transform even though nothing uses it yet (LB2), and a rewind that restores entities rather than players (LB8). All three are nearly free now and a protocol break later.
+
 **Done when**: my own movement feels instant and remote players are smooth over real internet (test me on RDP, friend at home).
 
 ### Phase 6 — Combat
-Weapons, raycast firing, recoil pattern, fire rate, reload, ammo, muzzle flash + tracer + impact decal, server-side hit detection with lag compensation, damage, death, respawn, killfeed.
+Weapons, firing, recoil pattern, fire rate, reload, ammo, muzzle flash + tracer + impact decal, server-side hit detection with lag compensation, damage, death, respawn, killfeed.
+
+**Load-bearing here (§10):** weapons are data in `shared/weapons.js` (LB4), and the projectile system is built first with hitscan expressed as a projectile of infinite speed (LB5) — not a raycast path with projectiles bolted on afterwards. The v1 rifle and pistol are both hitscan, so this costs almost nothing now and is what makes the mortar and the ATGM additions rather than rewrites.
+
 **Done when**: shooting feels responsive at 100 ms ping and hits register fairly.
 
 ### Phase 7 — UI / HUD / mobile
@@ -345,3 +354,94 @@ When a phase needs assets, **tell me exactly which pack to download and where to
 - Game server runs on the same Windows RDP
 - My home internet is slow (~10 Mbps down / 2.7 up, ~100 ms ping) — keep bandwidth per player under ~30 KB/s
 - GitHub repo is public; keep it clean enough for others to clone and run in two commands
+
+---
+
+## 10. Roadmap — and the decisions that are load-bearing for it
+
+Planned after v1 ships, roughly in this order: new weapons, mortar (arcing
+indirect fire), anti-tank guided missile (slow visible projectile, splash),
+23mm autocannon on a pickup, attack drone and FPV/kamikaze drone, drivable
+pickup truck.
+
+None of this gets built now. It exists here so Phase 5 and Phase 6 are built to
+accept it, because every item below is cheap to design for and expensive to
+retrofit.
+
+### Feasibility
+
+| Item | Verdict |
+|---|---|
+| New weapons | Trivial, if weapons are data |
+| Mortar | Realistic — easier than hitscan, see below |
+| ATGM | Realistic; wire-guided costs more than fire-and-forget |
+| 23mm on a pickup | Realistic; the gun is easy, the truck is the cost |
+| Attack / FPV drone | Realistic; reuses player entity machinery |
+| Drivable pickup | Realistic **only** as a kinematic arcade vehicle |
+
+**Slow projectiles are easier than bullets.** A hitscan shot needs the full
+rewind: every hitbox moved back ~150 ms to judge an instant hit. A mortar shell
+flies for seconds, so only the launch transform needs compensating and the
+flight is simulated identically on both sides from a single spawn event.
+
+**Not achievable — do not attempt:** networked rigid-body vehicle physics
+(suspension, rollovers, vehicle-vs-vehicle collisions at 100 ms ping),
+destructible terrain, dozens of simultaneous physics projectiles, physically
+"fair" vehicle-vs-player collisions. That last one needs a designed rule, not a
+simulation.
+
+### Load-bearing decisions
+
+Each of these is nearly free now and a rewrite later. The retrofit cost is
+stated so the tradeoff is never re-litigated from scratch.
+
+**LB1 — The entity system is generic from Phase 4. There is no "players array".**
+Snapshots carry a list of entities `{id, type, ...}`. Lag-compensation history is
+per entity. Interpolation rules are per type. Players, drones, projectiles and
+vehicles are all entities that differ by type, not by code path.
+*Retrofit cost: essentially all of Phase 5 — protocol, server sim, client
+interpolation, and lag compensation.*
+
+**LB2 — The transform model carries optional parenting from Phase 5.**
+An entity has `parentId` plus a local transform. Needed by a passenger in a
+vehicle and by a gun mounted on one. Ship it as an optional field even while
+nothing uses it.
+*Retrofit cost: wire-format change plus every prediction and interpolation path.*
+
+**LB3 — `protocol.js` sizes entity IDs and type tags for growth.**
+16-bit entity id, 8-bit type tag, explicit entity count per snapshot. Never "8
+player slots".
+*Retrofit cost: protocol rewrite, and a version break with any deployed client.*
+
+**LB4 — Weapons are data in `shared/weapons.js`, never classes.**
+One table: fire mode, damage, RPM, magazine, spread, recoil pattern, projectile
+type, muzzle velocity, gravity scale, splash radius and falloff. The server
+validates fire rate and damage against the same table the client fires from.
+*Retrofit cost: moderate on its own, but hardcoded weapons drag hardcoded fire
+logic into the client, which then diverges from the server.*
+
+**LB5 — Hitscan is a projectile with infinite speed. One firing pipeline.**
+Do not build a hitscan path and add projectiles later; build the projectile
+system first and express hitscan inside it.
+*Retrofit cost: two divergent firing paths, doubled lag-comp logic, doubled
+server validation, and two places for every future weapon bug.*
+
+**LB6 — Projectiles are deterministic and simulated on both sides from a spawn
+event.** Never stream projectile positions. Reliable spawn event carrying
+`{weaponId, origin, direction, launchTick}`, then both sides integrate the same
+fixed-step arc from `shared/`. The server owns the impact.
+*Retrofit cost: bandwidth blowup, and prediction becomes impossible.*
+
+**LB7 — Vehicles are kinematic and driven by a movement function in `shared/`,
+never a Rapier dynamic rigid body.**
+This is a constraint, not just a structure. Rigid-body prediction and
+reconciliation diverge badly at 100 ms, and correcting them jerks the vehicle
+visibly. An arcade vehicle model shares the same predict/replay machinery the
+player capsule already uses.
+*Retrofit cost: rewriting vehicle movement and prediction after discovering the
+desync — the worst possible time.*
+
+**LB8 — Lag compensation rewinds entities, not players.**
+The rewind must be able to restore a shooter standing on a moving platform, not
+only a player standing on the map.
+*Retrofit cost: rewriting the rewind path once vehicles exist.*
