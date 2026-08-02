@@ -17,7 +17,11 @@ const FRAME_HISTORY = 240
  */
 export function createDebugOverlay({ renderer, isWebGL2, msaaSamples, quality, onCycleQuality }) {
   const el = document.getElementById('debug-overlay') ?? createElement()
-  el.hidden = !import.meta.env.DEV
+
+  // Visible in dev, and in any build when ?debug=1 is present. A phone has no
+  // F3 key, so the URL is the only way in before the toggle button is tapped.
+  const forced = new URLSearchParams(location.search).get('debug') === '1'
+  el.hidden = !(import.meta.env.DEV || forced)
 
   const budget = isMobile() ? BUDGET.mobile : BUDGET.desktop
 
@@ -65,17 +69,49 @@ export function createDebugOverlay({ renderer, isWebGL2, msaaSamples, quality, o
 
   window.__CEDAR_DEBUG__ = debug
 
+  /** @type {{ setOverlayVisible: (visible: boolean) => void } | null} */
+  let touchUi = null
+
+  /** Show or hide, redrawing on show so it never appears blank or stale. */
+  function toggle() {
+    el.hidden = !el.hidden
+    if (!el.hidden) render()
+    touchUi?.setOverlayVisible(!el.hidden)
+  }
+
   window.addEventListener('keydown', (e) => {
     if (e.code === 'F3') {
       e.preventDefault()
-      el.hidden = !el.hidden
-      if (!el.hidden) render()
+      toggle()
     }
     if (e.code === 'F4') {
       e.preventDefault()
       onCycleQuality()
     }
   })
+
+  if (navigator.maxTouchPoints > 0) {
+    touchUi = createTouchToggle(toggle, onCycleQuality)
+    touchUi.setOverlayVisible(!el.hidden)
+
+    // Three-finger tap, for when the button is in the way. touchstart fires
+    // once per finger added, so the third one triggers it exactly once; the
+    // cooldown guards against a sloppy grip firing it twice.
+    // Negative infinity, not 0: performance.now() starts near zero, so a zero
+    // seed makes the cooldown swallow any gesture in the first 600 ms.
+    let lastGesture = Number.NEGATIVE_INFINITY
+    window.addEventListener(
+      'touchstart',
+      (e) => {
+        if (e.touches.length !== 3) return
+        const now = performance.now()
+        if (now - lastGesture < 600) return
+        lastGesture = now
+        toggle()
+      },
+      { passive: true }
+    )
+  }
 
   const history = new Array(FRAME_HISTORY).fill(0)
   let historyIndex = 0
@@ -141,7 +177,7 @@ export function createDebugOverlay({ renderer, isWebGL2, msaaSamples, quality, o
       `gl    ${debug.webgl2 ? 'WebGL2' : 'NO WEBGL2'}`,
       `qual  ${debug.quality.toUpperCase()}`,
       `      msaa ${debug.msaa ? `${debug.msaaSamples}x` : 'off'}  shadow ${debug.shadows ? 'on' : 'off'}`,
-      `[F3] overlay   [F4] quality`,
+      navigator.maxTouchPoints > 0 ? `[DBG] overlay  [QUAL] quality` : `[F3] overlay   [F4] quality`,
     ].join('\n')
   }
 
@@ -160,4 +196,40 @@ function createElement() {
   el.id = 'debug-overlay'
   document.body.appendChild(el)
   return el
+}
+
+/**
+ * Touch equivalents of F3 and F4, created only on devices that have a
+ * touchscreen so they never clutter a desktop screen.
+ *
+ * The quality button only appears while the overlay is open — cycling presets
+ * without being able to read the numbers is pointless.
+ *
+ * @param {() => void} onToggle
+ * @param {() => void} onCycleQuality
+ */
+function createTouchToggle(onToggle, onCycleQuality) {
+  const debugButton = document.createElement('button')
+  debugButton.id = 'debug-toggle'
+  debugButton.type = 'button'
+  debugButton.textContent = 'DBG'
+  debugButton.setAttribute('aria-label', 'Toggle debug overlay')
+  debugButton.addEventListener('click', onToggle)
+
+  const qualityButton = document.createElement('button')
+  qualityButton.id = 'quality-toggle'
+  qualityButton.type = 'button'
+  qualityButton.textContent = 'QUAL'
+  qualityButton.hidden = true
+  qualityButton.setAttribute('aria-label', 'Cycle quality preset')
+  qualityButton.addEventListener('click', onCycleQuality)
+
+  document.body.append(debugButton, qualityButton)
+
+  return {
+    /** @param {boolean} visible */
+    setOverlayVisible(visible) {
+      qualityButton.hidden = !visible
+    },
+  }
 }

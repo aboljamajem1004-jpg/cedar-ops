@@ -41,7 +41,7 @@ It honours `CEDAR_BASE`, so it tests whichever base path you build with.
 ## Quality settings
 
 Three presets, defined in `shared/constants.js`. Desktop starts on **high**,
-mobile on **medium**. Press **F4** to cycle; the choice is remembered.
+mobile on **medium**. The choice is remembered.
 
 | Preset | Pixel ratio | MSAA | Shadows |
 | --- | --- | --- | --- |
@@ -50,7 +50,25 @@ mobile on **medium**. Press **F4** to cycle; the choice is remembered.
 | high | 1.5 (1.25 on mobile) | on | on |
 
 MSAA and shadows are fixed when the WebGL context and materials are created, so
-switching those reloads the page. Pixel ratio and grid fade apply instantly.
+switching those reloads the page (carrying the new preset in the URL). Pixel
+ratio and grid fade apply instantly.
+
+### Opening the overlay
+
+The overlay is hidden by default in production builds. On desktop, **F3**
+toggles it and **F4** cycles quality. Neither works on a phone, so on any device
+with a touchscreen:
+
+| Control | Action |
+| --- | --- |
+| `?debug=1` in the URL | opens the overlay on load, any device |
+| **DBG** button, top right | toggle the overlay |
+| **QUAL** button, below it | cycle quality (only shown while the overlay is open) |
+| Three-finger tap | toggle the overlay |
+
+The buttons are created only on devices reporting a touchscreen, so they never
+appear on desktop. They sit top-right to stay clear of the fire and jump buttons
+that arrive bottom-right in Phase 7.
 
 ### Measuring one setting at a time
 

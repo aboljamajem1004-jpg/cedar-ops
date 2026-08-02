@@ -42,7 +42,11 @@ function applyQuality(next) {
   storeLevel(next)
 
   if (requiresReload(quality, settings)) {
-    location.reload()
+    // The ?q= pin outranks the stored preset, so a plain reload would land back
+    // on the preset we just left. Carry the new choice in the URL instead.
+    const url = new URL(location.href)
+    url.searchParams.set('q', next)
+    location.replace(url)
     return
   }
 
