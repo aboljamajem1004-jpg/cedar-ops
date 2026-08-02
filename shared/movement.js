@@ -118,10 +118,18 @@ export function computeMovement(state, input, dt, t = MOVEMENT) {
       : t.SPEED_WALK
 
   if (state.onGround) {
-    // Friction only with no input. Applying it always (the Quake approach)
-    // leaves top speed slightly below the tuned number, which makes SPEED_WALK
-    // a lie — and this file exists to be tuned by feel.
-    if (!hasInput) applyFriction(state.vel, t.FRICTION_GROUND, dt)
+    // Friction applies on EVERY grounded step, not only when input is absent.
+    //
+    // Friction is what sheds velocity in a direction you are no longer asking
+    // for. Skipping it while a key is held means strafing right and then
+    // pressing forward keeps the whole sideways velocity, and the player slides
+    // diagonally at SPEED_WALK * sqrt(2) indefinitely.
+    //
+    // This does NOT cost top speed. accelerate() tops up to exactly maxSpeed
+    // along the wish direction, and it can always cover what friction removed
+    // because ACCEL_GROUND (90) exceeds FRICTION_GROUND (70). Steady state is
+    // exactly SPEED_WALK.
+    applyFriction(state.vel, t.FRICTION_GROUND, dt)
     accelerate(state.vel, dirX, dirZ, maxSpeed, t.ACCEL_GROUND, dt)
 
     if (buttons & BTN.JUMP) {

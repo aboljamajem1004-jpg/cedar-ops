@@ -37,3 +37,24 @@ export function resolveTuning() {
 
   return { tuning, overrides, enabled }
 }
+
+/**
+ * Spawn position override: `?spawn=9,1,-4`.
+ *
+ * Same gate as the tuning overrides — dev builds, or an explicit ?tune=1.
+ * Useful for testing one corner of a map without walking there, and it keeps
+ * the movement tests from spending their entire timeout crossing open ground.
+ *
+ * @param {{x: number, y: number, z: number}} fallback
+ */
+export function resolveSpawn(fallback) {
+  const params = new URLSearchParams(location.search)
+  const enabled = import.meta.env.DEV || params.get('tune') === '1'
+  const raw = params.get('spawn')
+  if (!enabled || !raw) return fallback
+
+  const parts = raw.split(',').map(Number)
+  if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) return fallback
+
+  return { x: parts[0], y: parts[1], z: parts[2] }
+}

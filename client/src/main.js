@@ -8,7 +8,7 @@ import { createInput } from './core/input.js'
 import { createPlayer } from './game/player.js'
 import { createFirstPersonCamera } from './game/camera-fp.js'
 import { createBlockout } from './game/blockout.js'
-import { resolveTuning } from './core/tuning.js'
+import { resolveTuning, resolveSpawn } from './core/tuning.js'
 import { createAssets } from './core/assets.js'
 import { createStressScene, measureTextureMemory } from './game/stress.js'
 import {
@@ -80,7 +80,7 @@ const input = createInput(canvas, tuning)
 const player = createPlayer({
   physics,
   tuning,
-  spawn: { x: 0, y: tuning.SPAWN_HEIGHT, z: 8 },
+  spawn: resolveSpawn({ x: 0, y: tuning.SPAWN_HEIGHT, z: 8 }),
 })
 
 // --- stress test (§5.1) ---------------------------------------------------

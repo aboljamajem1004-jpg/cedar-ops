@@ -130,32 +130,22 @@ test('a ledge taller than the step height is not walked over', async ({ page }) 
 })
 
 test('a slope under the limit is walked up', async ({ page }) => {
-  // Reaching the ramp is a ~20 m walk, and simulated time runs far behind
-  // wall-clock under a software rasteriser. Raising the walk speed via the
-  // tuning override covers that ground quickly — the claim under test is slope
-  // climbing, not how fast the player walks.
-  await boot(page, '&tune=1&SPEED_WALK=14')
+  // Spawned beside the 22 degree ramp rather than walking 20 m to reach it.
+  // Under load the simulation runs far behind wall-clock, so a long approach
+  // can eat the entire timeout before the behaviour under test even starts.
+  await boot(page, '&tune=1&spawn=9,1,-4')
 
-  // The 22 degree ramp sits at x = 9, well under SLOPE_LIMIT_DEG.
-  await down(page, ['KeyD'])
-  await until(page, 'p.x > 8.5', 45_000)
-  await up(page, ['KeyD'])
-
-  // Grounded at 1.5 m up the ramp means it was walked, not fallen onto. As
-  // above, the wait is the assertion — the far end drops off.
+  // Grounded at 1.5 m up the ramp means it was walked, not fallen onto. The
+  // wait is the assertion — the far end drops off, so re-reading afterwards
+  // would be a race.
   await down(page, ['KeyW'])
-  await until(page, 'p.y > 1.5 && p.onGround', 60_000)
+  await until(page, 'p.y > 1.5 && p.onGround', 45_000)
   await up(page, ['KeyW'])
 })
 
 test('a slope over the limit is not climbed', async ({ page }) => {
-  // Same reasoning as the previous test: get to x = 17 quickly.
-  await boot(page, '&tune=1&SPEED_WALK=14')
-
-  // The 65 degree ramp sits at x = 17, above SLOPE_LIMIT_DEG.
-  await down(page, ['KeyD'])
-  await until(page, 'p.x > 16.5')
-  await up(page, ['KeyD'])
+  // Spawned beside the 65 degree ramp, well above SLOPE_LIMIT_DEG.
+  await boot(page, '&tune=1&spawn=17,1,-6')
 
   const before = await playerState(page)
   await down(page, ['KeyW'])

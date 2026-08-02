@@ -121,6 +121,31 @@ test('stopping is near instant, as the snappy tuning intends', () => {
   expect(steps).toBeLessThanOrEqual(expected)
 })
 
+test('changing direction sheds the old velocity', () => {
+  // Strafe right to full speed, then release and hold forward instead. The old
+  // sideways velocity must decay, and total ground speed must never exceed the
+  // tuned maximum.
+  const state = createState(0, 0, 0)
+  state.onGround = true
+
+  for (let i = 0; i < 60; i++) {
+    freeMove(state, computeMovement(state, { buttons: BTN.RIGHT, yaw: 0 }, DT), DT, true)
+  }
+  expect(Math.abs(state.vel.x)).toBeCloseTo(MOVEMENT.SPEED_WALK, 3)
+
+  let peak = 0
+  for (let i = 0; i < 60; i++) {
+    freeMove(state, computeMovement(state, { buttons: BTN.FORWARD, yaw: 0 }, DT), DT, true)
+    peak = Math.max(peak, Math.hypot(state.vel.x, state.vel.z))
+  }
+
+  // Without friction while input is held, the sideways velocity is never shed
+  // and the player slides diagonally at SPEED_WALK * sqrt(2) forever.
+  expect(peak).toBeLessThanOrEqual(MOVEMENT.SPEED_WALK * 1.02)
+  expect(Math.abs(state.vel.x)).toBeLessThan(0.1)
+  expect(Math.abs(state.vel.z)).toBeCloseTo(MOVEMENT.SPEED_WALK, 2)
+})
+
 test('jump take-off matches the tuned height', () => {
   // v = sqrt(2gh), so apex = v^2 / 2g should return JUMP_HEIGHT.
   const v = jumpVelocity()
