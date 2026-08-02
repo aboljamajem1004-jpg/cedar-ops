@@ -21,6 +21,10 @@
     "three": "0.185.1"
   },
   "devDependencies": {
+    "@gltf-transform/cli": "4.2.1",
+    "@gltf-transform/core": "4.2.1",
+    "@gltf-transform/extensions": "4.2.1",
+    "@gltf-transform/functions": "4.2.1",
     "@playwright/test": "1.62.1",
     "vite": "8.2.0"
   }

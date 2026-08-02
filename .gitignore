@@ -22,3 +22,6 @@ playwright-report/
 
 .DS_Store
 Thumbs.db
+
+# raw asset pack sources — never committed (CLAUDE.md §8)
+assets-src/
