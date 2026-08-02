@@ -38,6 +38,13 @@ const ANIMATION_GLB = path.join(
   'UAL1_Standard.glb'
 )
 
+/**
+ * Resized textures come from resize-textures.mjs, which runs first in its own
+ * process — see the comment there for why the two cannot share one.
+ */
+const TEXTURE_SIZE = Number(process.env.TEXTURE_SIZE || 1024)
+const RESIZED_DIR = `.resized-${TEXTURE_SIZE}`
+
 /** Bones from the neck up. Geometry weighted to these becomes the head mesh. */
 const HEAD_BONE = /^(head|neck_01|face|jaw|eye|brow)/i
 /** Mesh names in the output. The client looks the head up by this name. */
@@ -56,37 +63,52 @@ const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies(
 })
 
 /**
- * The pack ships glTF files referencing "<name>_png.png" while the zip contains
- * "<name>.png". Rewriting the JSON in memory avoids leaving junk copies of
- * every texture on disk next to the originals.
+ * Point every image at a real file, resized where one exists.
+ *
+ * Two problems are handled together. The pack ships glTF files referencing
+ * "<name>_png.png" while the zip contains "<name>.png", and the textures we
+ * actually want are the downscaled copies produced by resize-textures.mjs.
+ *
+ * Rewriting the JSON in memory avoids leaving junk copies of every texture on
+ * disk beside the originals.
  *
  * @param {string} gltfPath
- * @returns {string} path to a patched copy, or the original if nothing was wrong
+ * @returns {string} path to a patched copy, or the original if nothing changed
  */
 function repairTextureUris(gltfPath) {
   const json = JSON.parse(fs.readFileSync(gltfPath, 'utf8'))
   const dir = path.dirname(gltfPath)
   let repaired = 0
+  let redirected = 0
 
   for (const image of json.images ?? []) {
     if (!image.uri) continue
-    const decoded = decodeURIComponent(image.uri)
-    if (fs.existsSync(path.join(dir, decoded))) continue
+    let decoded = decodeURIComponent(image.uri)
 
-    const candidate = decoded.replace(/_png(\.\w+)$/, '$1')
-    if (fs.existsSync(path.join(dir, candidate))) {
-      image.uri = encodeURIComponent(candidate).replace(/%2F/g, '/')
+    if (!fs.existsSync(path.join(dir, decoded))) {
+      const candidate = decoded.replace(/_png(\.\w+)$/, '$1')
+      if (!fs.existsSync(path.join(dir, candidate))) {
+        throw new Error(`texture missing with no candidate: ${decoded}`)
+      }
+      decoded = candidate
       repaired++
-    } else {
-      throw new Error(`texture missing with no candidate: ${decoded}`)
     }
+
+    const resizedPath = path.join(dir, RESIZED_DIR, path.basename(decoded))
+    if (fs.existsSync(resizedPath)) {
+      decoded = `${RESIZED_DIR}/${path.basename(decoded)}`
+      redirected++
+    }
+
+    image.uri = decoded.split('/').map(encodeURIComponent).join('/')
   }
 
-  if (repaired === 0) return gltfPath
+  if (repaired) console.log(`  repaired ${repaired} broken texture URIs`)
+  if (redirected) console.log(`  using ${redirected} resized textures from ${RESIZED_DIR}/`)
+  else console.log(`  WARNING: no resized textures found — run resize-textures.mjs first`)
 
   const patched = path.join(dir, `.patched-${path.basename(gltfPath)}`)
   fs.writeFileSync(patched, JSON.stringify(json))
-  console.log(`  repaired ${repaired} broken texture URIs`)
   return patched
 }
 
