@@ -5,24 +5,18 @@ const SKY = 0x8fb6d6
 const GROUND = 0x3f4a3a
 
 /**
- * Phase 0 test scene: ground, grid, and three cubes at increasing distance.
- *
- * The cubes sit far apart on purpose. Draw-call and triangle counts mean
- * nothing with a single object, and separated objects make frustum and
- * distance culling visible once they are added in Phase 3.
+ * The world: ground, grid, lighting and fog. The camera belongs to
+ * camera-fp.js now that there is a player to attach it to, and the phase 0 test
+ * cubes are gone — the movement blockout replaced them.
  *
  * @param {{ shadows: boolean, grid: boolean, gridFadeStart: number, gridFadeEnd: number }} quality
- * @returns {{ scene: THREE.Scene, camera: THREE.PerspectiveCamera, update: (dt: number) => void, setGridFade: (start: number, end: number) => void }}
+ * @returns {{ scene: THREE.Scene, setGridFade: (start: number, end: number) => void, setShadows: (enabled: boolean) => void }}
  */
 export function createScene(quality) {
   const scene = new THREE.Scene()
   scene.background = new THREE.Color(SKY)
   // Fog hides the ground plane's far edge, so the world reads as open.
   scene.fog = new THREE.Fog(SKY, 40, 180)
-
-  const camera = new THREE.PerspectiveCamera(70, 1, 0.1, 500)
-  camera.position.set(0, 3.5, 12)
-  camera.lookAt(0, 1, -20)
 
   // --- lighting -------------------------------------------------------------
   // Hemisphere light is the cheap ambient fill: sky colour from above, ground
@@ -63,36 +57,6 @@ export function createScene(quality) {
     : null
   if (grid) scene.add(grid)
 
-  // --- cubes ----------------------------------------------------------------
-  const cubeGeo = new THREE.BoxGeometry(2, 2, 2)
-  const specs = [
-    { color: 0xe4572e, z: 0, x: -4 },
-    { color: 0x2ea3e4, z: -25, x: 3 },
-    { color: 0xf0c419, z: -60, x: -8 },
-  ]
-
-  const cubes = specs.map((spec) => {
-    const mesh = new THREE.Mesh(
-      cubeGeo,
-      new THREE.MeshStandardMaterial({ color: spec.color, roughness: 0.55 })
-    )
-    mesh.position.set(spec.x, 1, spec.z)
-    mesh.castShadow = true
-    mesh.receiveShadow = true
-    scene.add(mesh)
-    return mesh
-  })
-
-  /** @param {number} dt */
-  function update(dt) {
-    // Rotation is the cheapest possible proof that the loop is actually running
-    // and not showing one stale frame.
-    for (let i = 0; i < cubes.length; i++) {
-      cubes[i].rotation.y += dt * (0.6 - i * 0.15)
-      cubes[i].rotation.x += dt * 0.2
-    }
-  }
-
   /** @param {number} start @param {number} end */
   function setGridFade(start, end) {
     grid?.userData.setFade(start, end)
@@ -119,5 +83,5 @@ export function createScene(quality) {
     })
   }
 
-  return { scene, camera, update, setGridFade, setShadows }
+  return { scene, setGridFade, setShadows }
 }

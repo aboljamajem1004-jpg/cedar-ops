@@ -27,6 +27,59 @@ export const MAX_PLAYERS = 8
 /** Map is MAP_SIZE x MAP_SIZE metres. */
 export const MAP_SIZE = 200
 
+// --- input ------------------------------------------------------------------
+
+/** Button bitmask sent with every input. Keep values stable — they go on the wire. */
+export const BTN = {
+  FORWARD: 1 << 0,
+  BACK: 1 << 1,
+  LEFT: 1 << 2,
+  RIGHT: 1 << 3,
+  JUMP: 1 << 4,
+  SPRINT: 1 << 5,
+  CROUCH: 1 << 6,
+}
+
+// --- movement tuning --------------------------------------------------------
+
+/**
+ * Every number that decides how movement feels. This is the file to edit.
+ *
+ * Tuned for snappy/arcade: near-instant start and stop. That is a netcode
+ * decision as much as a feel one — momentum makes a mis-prediction take longer
+ * to converge, and at ~100 ms ping that shows up as visible sliding.
+ *
+ * In dev (or with ?tune=1) every key here is overridable from the URL, so these
+ * can be tuned live without a rebuild. See client/src/core/tuning.js.
+ *
+ * Units: metres, seconds, radians unless the name says otherwise.
+ */
+export const MOVEMENT = {
+  SPEED_WALK: 6.5, // top ground speed, m/s — CS-like, roughly 250 units/s
+  SPEED_SPRINT: 9.0, // top speed while sprint is held, m/s
+  SPEED_CROUCH: 3.2, // top speed while crouched, m/s
+  ACCEL_GROUND: 90, // how fast ground speed is reached, m/s² — high means snappy
+  FRICTION_GROUND: 70, // deceleration with no input on ground, m/s² — high means instant stop
+  ACCEL_AIR: 22, // acceleration available in the air, m/s²
+  AIR_CONTROL: 0.35, // fraction of steering authority kept in the air, 0 = none, 1 = full
+  AIR_SPEED_CAP: 2.5, // most speed air steering can add in the wish direction, m/s — this is what keeps a jump adjustable instead of flyable
+  GRAVITY: 24, // downward acceleration, m/s² — above 9.81 so jumps feel crisp, not floaty
+  JUMP_HEIGHT: 1.1, // apex height of a standing jump, m — velocity is derived from this
+  MAX_FALL_SPEED: 55, // terminal velocity, m/s
+  STEP_HEIGHT: 0.4, // tallest ledge walked over without jumping, m
+  SLOPE_LIMIT_DEG: 50, // steepest walkable slope, degrees — steeper than this slides
+  PLAYER_HEIGHT: 1.8, // standing capsule height, m
+  PLAYER_CROUCH_HEIGHT: 1.2, // crouched capsule height, m
+  PLAYER_RADIUS: 0.35, // capsule radius, m
+  EYE_HEIGHT: 1.65, // camera height above the feet when standing, m
+  EYE_HEIGHT_CROUCH: 1.05, // camera height above the feet when crouched, m
+  CROUCH_LERP: 14, // how fast the eye moves between stand and crouch, per second
+  MOUSE_SENSITIVITY: 0.0022, // radians of yaw per pixel of mouse movement
+  PITCH_LIMIT_DEG: 89, // how far up or down the camera can look, degrees
+  SPAWN_HEIGHT: 1.0, // height above ground the player spawns at, m
+  GROUND_STICK: 2.0, // downward pull while grounded, m/s — keeps the capsule on slopes and stairs
+}
+
 // --- rendering --------------------------------------------------------------
 
 /**
@@ -113,6 +166,13 @@ export const AUTOSCALE = {
  * moving object teleports through walls.
  */
 export const MAX_FRAME_DT = 0.1
+
+/**
+ * Most simulation steps run in one rendered frame. Beyond this the backlog is
+ * dropped: catching up costs time, which makes the next frame later, which
+ * grows the backlog — the classic spiral of death.
+ */
+export const MAX_STEPS_PER_FRAME = 5
 
 /** Performance budget, enforced from Phase 0 onward (CLAUDE.md §5). */
 export const BUDGET = {

@@ -3,6 +3,12 @@ import { startLoop } from './core/loop.js'
 import { createScene } from './game/scene.js'
 import { createDebugOverlay } from './ui/debug-overlay.js'
 import { createAutoScaler } from './core/autoscale.js'
+import { createPhysics } from './core/physics.js'
+import { createInput } from './core/input.js'
+import { createPlayer } from './game/player.js'
+import { createFirstPersonCamera } from './game/camera-fp.js'
+import { createBlockout } from './game/blockout.js'
+import { resolveTuning } from './core/tuning.js'
 import {
   resolveLevel,
   settingsFor,
@@ -19,8 +25,12 @@ const mobile = isMobile()
 let level = resolveLevel(mobile)
 let quality = settingsFor(level, mobile)
 
+const { tuning, overrides } = resolveTuning()
+
 const { renderer, isWebGL2, msaaSamples, resize, setPixelRatio } = createRenderer(canvas, quality)
-const { scene, camera, update, setGridFade, setShadows } = createScene(quality)
+const { scene, setGridFade, setShadows } = createScene(quality)
+const view = createFirstPersonCamera(tuning)
+const camera = view.camera
 
 const overlay = createDebugOverlay({
   renderer,
@@ -43,6 +53,33 @@ const autoScaler = createAutoScaler({
 })
 
 if (isManual()) autoScaler.disable('auto-scaler off (manual preset)')
+
+const overrideNames = Object.keys(overrides)
+if (overrideNames.length) {
+  debug.tuned = overrideNames
+  overlay.log(`tuning overridden: ${overrideNames.join(', ')}`)
+}
+
+// Physics is WebAssembly and has to be fetched and instantiated before a
+// capsule can exist, so boot is async from here.
+const physics = await createPhysics()
+
+const blockout = createBlockout(tuning)
+scene.add(blockout.group)
+for (const box of blockout.colliders) physics.addStaticBox(box)
+
+// The ground plane is visual only; it needs its own collider to stand on.
+physics.addStaticBox({
+  half: { x: 200, y: 0.5, z: 200 },
+  position: { x: 0, y: -0.5, z: 0 },
+})
+
+const input = createInput(canvas, tuning)
+const player = createPlayer({
+  physics,
+  tuning,
+  spawn: { x: 0, y: tuning.SPAWN_HEIGHT, z: 8 },
+})
 
 /**
  * Switch preset.
@@ -88,24 +125,48 @@ function applyQuality(next, manual) {
   if (msaaDeferred) overlay.log(`msaa change applies on next load`)
 }
 
-startLoop((dt) => {
-  update(dt)
-  renderer.render(scene, camera)
+startLoop({
+  fixedStep(dt) {
+    debug.simSteps++
+    player.fixedStep(input.sample(), dt)
+  },
 
-  // Pixel readback has to happen here, right after the draw call, while the
-  // drawing buffer still holds this frame.
-  if (debug.pixelSampleRequested) {
-    debug.pixelSampleRequested = false
-    debug.pixelSample = { ...samplePixels(renderer), frame: debug.frame }
-  }
+  render(dt, alpha) {
+    view.update({
+      position: player.interpolatedPosition(alpha),
+      yaw: input.yaw,
+      pitch: input.pitch,
+      crouching: player.state.crouching,
+      dt,
+    })
 
-  overlay.update()
-  autoScaler.update(dt * 1000)
+    renderer.render(scene, camera)
 
-  if (!debug.ready) {
-    // Set only after a frame has really been drawn. `load` fires long before
-    // WebGL has put anything on screen, so the harness waits on this instead.
-    debug.ready = true
-    window.__CEDAR_READY__ = true
-  }
+    // Pixel readback has to happen here, right after the draw call, while the
+    // drawing buffer still holds this frame.
+    if (debug.pixelSampleRequested) {
+      debug.pixelSampleRequested = false
+      debug.pixelSample = { ...samplePixels(renderer), frame: debug.frame }
+    }
+
+    debug.player = {
+      x: player.state.pos.x,
+      y: player.state.pos.y,
+      z: player.state.pos.z,
+      speed: player.speed,
+      onGround: player.state.onGround,
+      crouching: player.state.crouching,
+      locked: input.locked,
+    }
+
+    overlay.update()
+    autoScaler.update(dt * 1000)
+
+    if (!debug.ready) {
+      // Set only after a frame has really been drawn. `load` fires long before
+      // WebGL has put anything on screen, so the harness waits on this instead.
+      debug.ready = true
+      window.__CEDAR_READY__ = true
+    }
+  },
 })

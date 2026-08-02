@@ -44,6 +44,9 @@ export function createDebugOverlay({ renderer, isWebGL2, msaaSamples, quality, o
     /** Read from shared/constants.js — proves the cross-root import resolved. */
     tickHz: TICK_HZ,
     frame: 0,
+    /** Fixed simulation steps run so far — should advance at TICK_HZ. */
+    simSteps: 0,
+    simHz: 0,
     ready: false,
     quality: quality.level,
     msaa: quality.msaa,
@@ -143,6 +146,7 @@ export function createDebugOverlay({ renderer, isWebGL2, msaaSamples, quality, o
   let elapsedMs = 0
   let worstMs = 0
   let lastNow = performance.now()
+  let lastSimSteps = 0
 
   function update() {
     const info = renderer.info.render
@@ -171,6 +175,10 @@ export function createDebugOverlay({ renderer, isWebGL2, msaaSamples, quality, o
     if (elapsedMs >= 1000) {
       debug.fps = Math.round((frames * 1000) / elapsedMs)
       debug.fpsMin = Math.round(1000 / worstMs)
+      // A sim rate that is not TICK_HZ means the simulation is running at the
+      // wrong speed, which no amount of correct movement maths can fix.
+      debug.simHz = Math.round(((debug.simSteps - lastSimSteps) * 1000) / elapsedMs)
+      lastSimSteps = debug.simSteps
       frames = 0
       elapsedMs = 0
       worstMs = 0
@@ -189,8 +197,17 @@ export function createDebugOverlay({ renderer, isWebGL2, msaaSamples, quality, o
       `tris  ${pad(debug.triangles)}  / ${budget.triangles}`,
       `mem   ${debug.geometries} geo  ${debug.textures} tex`,
       `res   ${debug.width}x${debug.height} @${debug.pixelRatio}`,
-      `net   ping ${debug.ping ?? '—'}  tick ${debug.tickHz}Hz`,
+      `sim   ${debug.simHz} Hz  (target ${debug.tickHz})`,
+      `net   ping ${debug.ping ?? '—'}`,
       `gl    ${debug.webgl2 ? 'WebGL2' : 'NO WEBGL2'}`,
+      ...(debug.player
+        ? [
+            `pos   ${debug.player.x.toFixed(1)} ${debug.player.y.toFixed(1)} ${debug.player.z.toFixed(1)}`,
+            `spd   ${debug.player.speed.toFixed(2)} m/s  ${debug.player.onGround ? 'ground' : 'air'}${debug.player.crouching ? '  crouch' : ''}`,
+            `look  ${debug.player.locked ? 'locked' : 'click to lock'}`,
+          ]
+        : []),
+      ...(debug.tuned ? [`tune  ${debug.tuned.join(' ')}`] : []),
       `qual  ${debug.quality.toUpperCase()}`,
       `      msaa ${debug.msaa ? `${debug.msaaSamples}x` : 'off'}  shadow ${debug.shadows ? 'on' : 'off'}`,
       navigator.maxTouchPoints > 0 ? `[DBG] overlay  [QUAL] quality` : `[F3] overlay   [F4] quality`,

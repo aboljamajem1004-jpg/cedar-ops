@@ -1,17 +1,23 @@
-import { MAX_FRAME_DT } from '../../../shared/constants.js'
+import { MAX_FRAME_DT, TICK_MS, MAX_STEPS_PER_FRAME } from '../../../shared/constants.js'
 
 /**
- * requestAnimationFrame loop with a clamped delta.
+ * Fixed-timestep loop with interpolated rendering.
  *
- * Phase 0 renders every frame with a variable delta. The fixed 30 Hz simulation
- * step arrives in Phase 1, when there is something to simulate.
+ * The simulation must advance in equal steps or it is not deterministic, and a
+ * non-deterministic simulation cannot be replayed — which is exactly what
+ * client prediction does every time a snapshot arrives in phase 5. Rendering
+ * still runs as fast as the display allows, interpolating between the last two
+ * simulated states.
  *
- * @param {(dt: number, elapsed: number) => void} onFrame dt and elapsed in seconds
+ * @param {{ fixedStep: (dt: number) => void,
+ *           render: (dt: number, alpha: number) => void }} handlers
  * @returns {{ stop: () => void }}
  */
-export function startLoop(onFrame) {
+export function startLoop({ fixedStep, render }) {
+  const stepSeconds = TICK_MS / 1000
+
   let last = performance.now()
-  let start = last
+  let accumulator = 0
   let running = true
   let handle = 0
 
@@ -22,7 +28,20 @@ export function startLoop(onFrame) {
 
     const dt = Math.min((now - last) / 1000, MAX_FRAME_DT)
     last = now
-    onFrame(dt, (now - start) / 1000)
+    accumulator += dt * 1000
+
+    let steps = 0
+    while (accumulator >= TICK_MS && steps < MAX_STEPS_PER_FRAME) {
+      fixedStep(stepSeconds)
+      accumulator -= TICK_MS
+      steps++
+    }
+
+    // If the machine cannot keep up, drop the backlog instead of trying to
+    // catch up forever — each catch-up step makes the next frame later still.
+    if (steps === MAX_STEPS_PER_FRAME) accumulator = 0
+
+    render(dt, accumulator / TICK_MS)
   }
 
   handle = requestAnimationFrame(frame)
