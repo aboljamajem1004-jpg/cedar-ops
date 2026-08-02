@@ -11,6 +11,7 @@ import { createBlockout } from './game/blockout.js'
 import { resolveTuning, resolveSpawn } from './core/tuning.js'
 import { createAssets } from './core/assets.js'
 import { createStressScene, measureTextureMemory } from './game/stress.js'
+import { createLoadingScreen } from './ui/loading.js'
 import {
   resolveLevel,
   settingsFor,
@@ -22,6 +23,18 @@ import {
 } from './core/quality.js'
 
 const canvas = /** @type {HTMLCanvasElement} */ (document.getElementById('game'))
+const loading = createLoadingScreen()
+
+// Anything thrown after this point still reaches the screen rather than only
+// the console — nobody has devtools open on a phone.
+// Marked non-specific: these fire before the code that issued the request can
+// report what it was actually loading, and that message is the useful one.
+window.addEventListener('error', (e) =>
+  loading.fail('Unhandled error', e.error ?? e.message, { specific: false })
+)
+window.addEventListener('unhandledrejection', (e) =>
+  loading.fail('Unhandled rejection', e.reason, { specific: false })
+)
 
 const mobile = isMobile()
 let level = resolveLevel(mobile)
@@ -64,8 +77,13 @@ if (overrideNames.length) {
 
 // Physics is WebAssembly and has to be fetched and instantiated before a
 // capsule can exist, so boot is async from here.
-const physics = await createPhysics()
+loading.step('loading physics…', 0.15)
+const physics = await createPhysics().catch((error) => {
+  loading.fail('Could not start the physics engine', error)
+  throw error
+})
 
+loading.step('building world…', 0.3)
 const blockout = createBlockout(tuning)
 scene.add(blockout.group)
 for (const box of blockout.colliders) physics.addStaticBox(box)
@@ -92,10 +110,20 @@ const stressCount = Number(new URLSearchParams(location.search).get('stress') ||
 let stress = null
 
 if (stressCount > 0) {
-  const environment = await assets.loadEnvironment('assets/hdri/sky_1k.hdr')
+  loading.step('loading lighting…', 0.45)
+  const environment = await assets
+    .loadEnvironment('assets/hdri/sky_1k.hdr')
+    .catch((error) => {
+      loading.fail('Could not load the environment map (assets/hdri/sky_1k.hdr)', error)
+      throw error
+    })
   scene.environment = environment
 
-  stress = await createStressScene({ scene, assets, count: stressCount })
+  loading.step(`loading ${stressCount} characters…`, 0.6)
+  stress = await createStressScene({ scene, assets, count: stressCount }).catch((error) => {
+    loading.fail('Could not load character models', error)
+    throw error
+  })
 
   const memory = measureTextureMemory(scene)
   debug.textureBytes = memory.bytes
@@ -105,6 +133,13 @@ if (stressCount > 0) {
     `stress ${stressCount}: ${(memory.bytes / 1048576).toFixed(1)} MB textures ` +
       `(${memory.compressed} ktx2, ${memory.uncompressed} raw)`
   )
+  // KTX2 transcodes to whatever the device supports, so the same asset costs
+  // different amounts on different GPUs. Naming the format makes that visible
+  // instead of leaving an unexplained number.
+  const biggest = memory.breakdown[0]
+  if (biggest) overlay.log(`largest: ${biggest.name} ${biggest.detail}`)
+  const sample = memory.breakdown.find((t) => t.detail.includes('B/px'))
+  if (sample) overlay.log(`transcode: ${sample.detail}`)
 }
 
 /**
@@ -194,8 +229,11 @@ startLoop({
     if (!debug.ready) {
       // Set only after a frame has really been drawn. `load` fires long before
       // WebGL has put anything on screen, so the harness waits on this instead.
+      // The loading screen is dismissed here for the same reason: the first
+      // real frame exists, so hiding it cannot reveal a black canvas.
       debug.ready = true
       window.__CEDAR_READY__ = true
+      loading.done()
     }
   },
 })

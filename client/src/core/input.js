@@ -1,20 +1,14 @@
-import { BTN, MOVEMENT } from '../../../shared/constants.js'
+import { BTN, MOVEMENT, KEYMAP } from '../../../shared/constants.js'
 
-const KEY_TO_BUTTON = {
-  KeyW: BTN.FORWARD,
-  ArrowUp: BTN.FORWARD,
-  KeyS: BTN.BACK,
-  ArrowDown: BTN.BACK,
-  KeyA: BTN.LEFT,
-  ArrowLeft: BTN.LEFT,
-  KeyD: BTN.RIGHT,
-  ArrowRight: BTN.RIGHT,
-  Space: BTN.JUMP,
-  ShiftLeft: BTN.SPRINT,
-  ShiftRight: BTN.SPRINT,
-  ControlLeft: BTN.CROUCH,
-  KeyC: BTN.CROUCH,
-}
+/**
+ * Flattened from KEYMAP: KeyboardEvent.code -> button bit. Bindings live in
+ * shared/constants.js so there is one place to change them.
+ */
+const KEY_TO_BUTTON = Object.fromEntries(
+  Object.entries(KEYMAP).flatMap(([action, codes]) =>
+    codes.map((code) => [code, BTN[action]])
+  )
+)
 
 /**
  * Keyboard and mouse-look input.

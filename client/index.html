@@ -40,6 +40,66 @@
       #debug-overlay[hidden] {
         display: none;
       }
+      #loading {
+        position: fixed;
+        inset: 0;
+        z-index: 20;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        padding: 24px;
+        background: #0b0e13;
+        color: #e6e9ef;
+        text-align: center;
+        transition: opacity 0.3s ease;
+      }
+      #loading[hidden] {
+        display: none;
+      }
+      #loading.done {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .loading-title {
+        font: 600 22px/1 system-ui, sans-serif;
+        letter-spacing: 4px;
+        color: #9ef5b0;
+      }
+      .loading-status {
+        font: 13px/1.4 ui-monospace, monospace;
+        color: #8a93a3;
+        min-height: 1.4em;
+      }
+      .loading-bar {
+        width: min(280px, 70vw);
+        height: 3px;
+        border-radius: 2px;
+        background: rgba(255, 255, 255, 0.12);
+        overflow: hidden;
+      }
+      .loading-fill {
+        height: 100%;
+        width: 0%;
+        background: #9ef5b0;
+        transition: width 0.25s ease;
+      }
+      .loading-error {
+        max-width: min(560px, 90vw);
+        padding: 12px 14px;
+        border: 1px solid rgba(255, 128, 112, 0.5);
+        border-radius: 6px;
+        background: rgba(120, 30, 24, 0.35);
+        color: #ffb4a2;
+        font: 12px/1.5 ui-monospace, monospace;
+        white-space: pre-wrap;
+        text-align: left;
+        user-select: text;
+      }
+      .loading-error[hidden] {
+        display: none;
+      }
       /* Touch-only toggle. Top-right stays clear of the fire and jump buttons
          that land bottom-right in phase 7. */
       #debug-toggle,
@@ -73,6 +133,15 @@
   </head>
   <body>
     <canvas id="game"></canvas>
+    <!-- Static markup so something is on screen before any JavaScript parses.
+         On a phone over a slow connection the assets take seconds, and a black
+         screen with no feedback reads as a broken page. -->
+    <div id="loading">
+      <div class="loading-title">CEDAR OPS</div>
+      <div class="loading-status" id="loading-status">starting…</div>
+      <div class="loading-bar"><div class="loading-fill" id="loading-fill"></div></div>
+      <div class="loading-error" id="loading-error" hidden></div>
+    </div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

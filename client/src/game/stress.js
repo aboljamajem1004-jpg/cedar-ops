@@ -8,6 +8,31 @@ export const TEAM_COLORS = { blue: 0x4a7fd4, red: 0xd45a4a }
 const CLIPS = ['Idle_Loop', 'Walk_Loop', 'Jog_Fwd_Loop', 'Crouch_Idle_Loop']
 
 /**
+ * GPU format names, so texture memory can be explained rather than guessed at.
+ *
+ * KTX2 does not store a fixed GPU format — it transcodes at load time to
+ * whatever the device supports, and different devices pick formats with
+ * different costs per pixel. That is why the same asset can measure larger on
+ * desktop than on a phone.
+ */
+const FORMAT_NAMES = new Map([
+  [THREE.RGBA_S3TC_DXT5_Format, 'BC3 1B/px'],
+  [THREE.RGB_S3TC_DXT1_Format, 'BC1 0.5B/px'],
+  [THREE.RGBA_S3TC_DXT1_Format, 'BC1a 0.5B/px'],
+  [THREE.RGBA_BPTC_Format, 'BC7 1B/px'],
+  [THREE.RGBA_ASTC_4x4_Format, 'ASTC 4x4 1B/px'],
+  [THREE.RGB_ETC1_Format, 'ETC1 0.5B/px'],
+  [THREE.RGB_ETC2_Format, 'ETC2 0.5B/px'],
+  [THREE.RGBA_ETC2_EAC_Format, 'ETC2-EAC 1B/px'],
+  [THREE.RGBAFormat, 'RGBA8 4B/px (uncompressed!)'],
+])
+
+/** @param {any} texture */
+function formatName(texture) {
+  return FORMAT_NAMES.get(texture.format) ?? `format ${texture.format}`
+}
+
+/**
  * Spawn N characters for the §5.1 stress test.
  *
  * Both models are used, alternating, because that is the honest worst case: a
@@ -92,7 +117,8 @@ export function measureTextureMemory(root) {
 
     if (texture.isCompressedTexture && texture.mipmaps?.length) {
       for (const mip of texture.mipmaps) size += mip.data?.byteLength ?? 0
-      detail = `ktx2 ${texture.mipmaps.length} mips`
+      const base = texture.mipmaps[0]
+      detail = `${formatName(texture)} ${base?.width}x${base?.height} ${texture.mipmaps.length} mips`
       compressed++
     } else if (texture.image?.width) {
       // Half-float is 8 bytes per texel, float 16, everything else 4.

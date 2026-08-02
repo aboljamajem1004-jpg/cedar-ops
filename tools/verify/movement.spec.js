@@ -173,21 +173,40 @@ test('jumping leaves the ground and lands again', async ({ page }) => {
   expect(landed.y).toBeCloseTo(start.y, 1)
 })
 
-test('crouching slows movement', async ({ page }) => {
+test('crouch-walk works on C, without ever needing Ctrl+W', async ({ page }) => {
   await boot(page)
 
-  await down(page, ['ControlLeft'])
+  // C is the primary crouch binding precisely so this combination exists:
+  // crouch on Ctrl made crouch-walk Ctrl+W, which closes the browser tab and
+  // cannot be intercepted by the page.
+  await down(page, ['KeyC'])
   await until(page, 'p.crouching === true', 5000)
+
   await down(page, ['KeyW'])
   await until(page, 'p.speed > 1')
   await page.waitForTimeout(600)
 
   const crouched = await playerState(page)
-  await up(page, ['KeyW', 'ControlLeft'])
+  await up(page, ['KeyW', 'KeyC'])
 
-  expect(crouched.crouching).toBe(true)
-  // SPEED_CROUCH is 3.2; walking is 6.5.
-  expect(crouched.speed).toBeLessThan(3.6)
+  expect(crouched.crouching, 'still crouching while walking').toBe(true)
+  // The player must MOVE, not stop: SPEED_CROUCH is 3.2, walking is 6.5.
+  expect(crouched.speed, 'crouch-walk moves').toBeGreaterThan(1.5)
+  expect(crouched.speed, 'at crouch speed, not walk speed').toBeLessThan(3.6)
+
+  // And it stands back up when released.
+  await until(page, 'p.crouching === false', 5000)
+})
+
+test('Ctrl still crouches, as the secondary binding', async ({ page }) => {
+  await boot(page)
+
+  await down(page, ['ControlLeft'])
+  await until(page, 'p.crouching === true', 5000)
+  const state = await playerState(page)
+  await up(page, ['ControlLeft'])
+
+  expect(state.crouching).toBe(true)
 })
 
 test('URL tuning overrides apply without a rebuild', async ({ page }) => {

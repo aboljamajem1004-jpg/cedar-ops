@@ -40,6 +40,64 @@ export const BTN = {
   CROUCH: 1 << 6,
 }
 
+/**
+ * Keys the browser or OS claims. A page CANNOT block these — preventDefault is
+ * ignored — and pointer lock does not change that. Binding any of them produces
+ * a control that appears to work until it closes the tab mid-match.
+ *
+ * The rule that follows: **never bind a modifier chord.** A modifier held for
+ * movement turns every other key into a chord, and the browser wins.
+ */
+export const RESERVED_KEYS = {
+  'Ctrl+KeyW': 'closes the tab',
+  'Ctrl+KeyT': 'opens a new tab',
+  'Ctrl+KeyN': 'opens a new window',
+  'Ctrl+KeyR': 'reloads the page',
+  'Ctrl+KeyL': 'focuses the address bar',
+  'Ctrl+KeyD': 'bookmarks the page',
+  'Ctrl+KeyP': 'opens print',
+  'Ctrl+KeyS': 'opens save',
+  'Ctrl+KeyJ': 'opens downloads',
+  'Ctrl+Tab': 'switches tab',
+  'Ctrl+Shift+*': 'reserved browser chords',
+  'Alt+F4': 'closes the window (OS)',
+  'Alt+Tab': 'switches application (OS)',
+  'Meta': 'OS key',
+  F5: 'reloads the page',
+  F6: 'cycles browser panes',
+  F11: 'toggles browser fullscreen',
+  F12: 'opens devtools',
+}
+
+/**
+ * Gameplay bindings, by KeyboardEvent.code. Edit here and nowhere else.
+ *
+ * CROUCH leads with KeyC deliberately. Ctrl is kept as a secondary for people
+ * used to it, but it is only safe standing still: holding Ctrl to crouch and
+ * pressing W to walk is Ctrl+W, which closes the tab and cannot be prevented.
+ * Anyone who wants crouch-walk must use C.
+ */
+export const KEYMAP = {
+  FORWARD: ['KeyW', 'ArrowUp'],
+  BACK: ['KeyS', 'ArrowDown'],
+  LEFT: ['KeyA', 'ArrowLeft'],
+  RIGHT: ['KeyD', 'ArrowRight'],
+  JUMP: ['Space'],
+  SPRINT: ['ShiftLeft', 'ShiftRight'],
+  CROUCH: ['KeyC', 'ControlLeft', 'ControlRight'],
+}
+
+/**
+ * Non-gameplay keys. F3 and F4 are safe: Chrome's find-next on F3 yields to
+ * preventDefault, and F4 is unclaimed. F5, F11 and F12 are not, which is why
+ * none of them appear here.
+ */
+export const UI_KEYS = {
+  TOGGLE_OVERLAY: 'F3',
+  CYCLE_QUALITY: 'F4',
+  TOGGLE_CAMERA: 'KeyV',
+}
+
 // --- movement tuning --------------------------------------------------------
 
 /**

@@ -1,9 +1,25 @@
 import { Vector2 } from 'three'
-import { TICK_HZ, BUDGET } from '../../../shared/constants.js'
+import { TICK_HZ, BUDGET, KEYMAP, UI_KEYS } from '../../../shared/constants.js'
 import { isMobile } from '../core/renderer.js'
 
 /** Frame times kept for percentile reporting — 4 seconds at 60 fps. */
 const FRAME_HISTORY = 240
+
+/** Strip the noise off KeyboardEvent.code for display: "KeyC" -> "C". */
+const shortName = (code) => code.replace(/^(Key|Digit)/, '').replace(/^Arrow/, '')
+
+/**
+ * Active bindings, read from the single source in shared/constants.js so the
+ * overlay can never drift from what the input handler actually does.
+ */
+const BINDING_LINES = [
+  ...Object.entries(KEYMAP).map(
+    ([action, codes]) => `  ${action.toLowerCase().padEnd(8)} ${codes.map(shortName).join(' / ')}`
+  ),
+  ...Object.entries(UI_KEYS).map(
+    ([action, code]) => `  ${action.toLowerCase().replace(/_/g, ' ').padEnd(8)} ${shortName(code)}`
+  ),
+]
 /** Recent events shown at the bottom of the overlay. */
 const LOG_LIMIT = 4
 
@@ -98,14 +114,21 @@ export function createDebugOverlay({ renderer, isWebGL2, msaaSamples, quality, o
     touchUi?.setOverlayVisible(!el.hidden)
   }
 
+  let bindingsVisible = false
+
   window.addEventListener('keydown', (e) => {
-    if (e.code === 'F3') {
+    if (e.code === UI_KEYS.TOGGLE_OVERLAY) {
       e.preventDefault()
       toggle()
     }
-    if (e.code === 'F4') {
+    if (e.code === UI_KEYS.CYCLE_QUALITY) {
       e.preventDefault()
       onCycleQuality()
+    }
+    if (e.code === 'F1') {
+      e.preventDefault()
+      bindingsVisible = !bindingsVisible
+      if (!el.hidden) render()
     }
   })
 
@@ -214,6 +237,7 @@ export function createDebugOverlay({ renderer, isWebGL2, msaaSamples, quality, o
       `qual  ${debug.quality.toUpperCase()}`,
       `      msaa ${debug.msaa ? `${debug.msaaSamples}x` : 'off'}  shadow ${debug.shadows ? 'on' : 'off'}`,
       navigator.maxTouchPoints > 0 ? `[DBG] overlay  [QUAL] quality` : `[F3] overlay   [F4] quality`,
+      ...(bindingsVisible ? ['', ...BINDING_LINES] : ['[F1] bindings']),
       ...(debug.log.length ? ['', ...debug.log] : []),
     ].join('\n')
   }
