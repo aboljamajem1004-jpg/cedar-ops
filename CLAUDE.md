@@ -8,7 +8,7 @@
 ## 0. How to work with me (READ FIRST)
 
 **Communication**
-- Talk to me in **Arabic**. Code, comments, commit messages and file names stay in **English**.
+- Talk to me in **English**. Keep it plain and direct — short sentences, no idioms.. Code, comments, commit messages and file names stay in **English**.
 - I am an experienced Python / FastAPI / React developer, but **new to 3D and game netcode**. Explain 3D-specific concepts briefly when you introduce them; don't explain basic programming.
 
 **Working rhythm — this is mandatory**
