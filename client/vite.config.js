@@ -8,12 +8,15 @@ const repoRoot = path.resolve(clientDir, '..')
 /**
  * One base path everywhere — dev, preview and production.
  *
- * GitHub Pages serves this repo from https://<user>.github.io/cedar-ops/, so
- * every asset URL needs the /cedar-ops/ prefix. Using the same value in dev
- * means a path bug shows up on the dev server instead of only on Pages.
- * Override with CEDAR_BASE=/ when serving from a domain root.
+ * Cloudflare Pages (the deploy target) serves the site from the domain root, so
+ * the default is '/'. Hosts that serve from a subpath must pass their prefix in
+ * CEDAR_BASE; the GitHub Pages fallback workflow sets CEDAR_BASE=/cedar-ops/
+ * because it publishes to https://<user>.github.io/cedar-ops/.
+ *
+ * Dev, preview and the verify harness all read the same variable, so whichever
+ * base you build with is the base you test against.
  */
-const base = process.env.CEDAR_BASE || '/cedar-ops/'
+const base = process.env.CEDAR_BASE || '/'
 
 export default defineConfig({
   root: clientDir,

@@ -56,7 +56,7 @@ A **free, open-source, browser-based 3D multiplayer shooter**.
 - **Multiplayer** — small private matches with friends (4v4 target, 8 players max)
 - Runs in the browser on **desktop and mobile phones**, no install, no accounts
 - **Lightweight**: must run on integrated GPUs and mid-range Android phones
-- Client hosted free on **GitHub Pages**; game server self-hosted on my **Windows RDP**
+- Client hosted free on **Cloudflare Pages**; game server self-hosted on my **Windows RDP**
 - Modern stylized **low-poly** art direction (not realistic)
 
 ### Non-goals (do not build these)
@@ -193,8 +193,10 @@ Techniques that are required, not optional:
 Each phase ends with: it runs, I tested it, it's committed.
 
 ### Phase 0 — Skeleton
-Vite project, repo structure, root npm scripts (`dev:client`, `dev:server`, `build`, `verify`), Three.js scene with a ground plane and a lit cube, F3 debug overlay (FPS, draw calls, tris), the Playwright self-verification harness in `tools/verify/`, and one deploy to GitHub Pages to prove the pipeline.
-**Done when**: `npm run verify` passes with a screenshot showing the cube, and I open the GitHub Pages URL on phone and desktop and see it running at 60/30 fps.
+Vite project, repo structure, root npm scripts (`dev:client`, `build`, `verify`), Three.js scene with a ground plane and a lit cube, F3 debug overlay (FPS, draw calls, tris), the Playwright self-verification harness in `tools/verify/`, and one live deploy to prove the pipeline.
+**Done when**: `npm run verify` passes with a screenshot showing the cube, and I open the Cloudflare Pages URL on phone and desktop and see it running at 60/30 fps.
+
+`dev:server` is deliberately absent until Phase 4, when `server/index.js` first exists — no placeholder scripts.
 
 ### Phase 1 — Local first-person movement
 Rapier physics world, capsule character controller, WASD + mouse look (Pointer Lock), jump, sprint, crouch, gravity, slope/step handling. Movement logic lives in `shared/movement.js` from day one.
@@ -228,7 +230,11 @@ Landing page (create/join room, nickname), HUD (health, ammo, crosshair, killfee
 TDM scoring, round timer, team assignment, end-of-match screen, sounds (footsteps, gunfire, hit markers), particles, hit feedback.
 
 ### Phase 9 — Deploy for real
-Client on GitHub Pages via GitHub Actions. Server on the RDP under pm2 + Cloudflare Tunnel for HTTPS/WSS. Environment config so the client knows the server URL. Write the deploy steps into README.md.
+Client on **Cloudflare Pages**, which builds from the repo on every push to `main`. Server on the RDP under pm2 + Cloudflare Tunnel for HTTPS/WSS. Environment config so the client knows the server URL. Write the deploy steps into README.md.
+
+**Why not GitHub Pages**: a failed card authorization locked GitHub Actions on this account (2026-08-02), so the Actions-based deploy cannot run. The workflow is kept at `.github/workflows/deploy.yml` as a working fallback, manual-trigger only. If Actions is ever unlocked, that file still deploys correctly — it passes `CEDAR_BASE=/cedar-ops/` because GitHub Pages serves from a subpath while Cloudflare serves from the domain root.
+
+**Base path rule**: never hardcode a base path. Vite, the dev server and the verify harness all read `CEDAR_BASE`, defaulting to `/`. A host that serves from a subpath sets that variable; nothing else changes.
 
 ---
 

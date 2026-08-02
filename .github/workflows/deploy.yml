@@ -1,8 +1,19 @@
-name: Deploy client to GitHub Pages
+# FALLBACK DEPLOY — not the primary target.
+#
+# The client is deployed by Cloudflare Pages, which builds from this repo on
+# every push (see README.md). This workflow is kept as a working, documented
+# alternative in case Cloudflare is unavailable.
+#
+# It is manual-trigger only (Actions tab -> Run workflow). It deliberately does
+# NOT run on push, so it can never race the Cloudflare deploy or publish a
+# second copy of the site without someone asking for it.
+#
+# Prerequisites: repo Settings -> Pages -> Source: GitHub Actions, and an
+# account with GitHub Actions enabled.
+
+name: Deploy client to GitHub Pages (fallback)
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 # Required by actions/deploy-pages: read the repo, write the Pages site, and
@@ -31,7 +42,11 @@ jobs:
 
       - run: npm ci
 
+      # GitHub Pages serves this repo from a subpath, not the domain root, so
+      # every asset URL needs the prefix. Cloudflare needs no equivalent.
       - run: npm run build
+        env:
+          CEDAR_BASE: /cedar-ops/
 
       - uses: actions/configure-pages@v5
 

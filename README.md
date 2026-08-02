@@ -14,11 +14,7 @@ npm install
 npm run dev
 ```
 
-Then open the URL Vite prints — <http://localhost:5173/cedar-ops/>.
-
-The `/cedar-ops/` path is not a typo. The production site is served from that
-subpath on GitHub Pages, so dev uses it too and path bugs surface immediately.
-Serving from a domain root instead? Set `CEDAR_BASE=/`.
+Then open the URL Vite prints — <http://localhost:5173/>.
 
 ## Scripts
 
@@ -39,6 +35,8 @@ actually renders (a framebuffer readback catches a black frame), that there are
 no console or page errors, that draw calls and triangles are inside budget, and
 that the cross-root `shared/` import resolves in dev as well as in the bundle.
 Output lands in `tools/verify/out/` — `phase0.png` and `report.json`.
+
+It honours `CEDAR_BASE`, so it tests whichever base path you build with.
 
 The FPS number it prints comes from software rendering (SwiftShader) in headless
 Chrome. It proves the scene renders without erroring. It is **not** a
@@ -61,9 +59,54 @@ duplicate that logic into `client/`.
 
 ## Deploy
 
-Pushing to `main` builds the client and publishes it to GitHub Pages via
-`.github/workflows/deploy.yml`. The repository needs **Settings → Pages →
-Source: GitHub Actions** set once, or the deploy step fails.
+The client is deployed by **Cloudflare Pages**, which builds from this repo on
+every push to `main`. One-time setup in the Cloudflare dashboard:
+
+1. <https://dash.cloudflare.com> → **Workers & Pages** → **Create** →
+   **Pages** tab → **Connect to Git**
+2. Authorise GitHub, pick the **cedar-ops** repository, **Begin setup**
+3. Settings:
+
+   | Field | Value |
+   | --- | --- |
+   | Project name | `cedar-ops` |
+   | Production branch | `main` |
+   | Framework preset | None |
+   | Build command | `npm run build` |
+   | Build output directory | `client/dist` |
+   | Root directory | *(leave empty — the repo root)* |
+
+4. **Save and Deploy**
+
+The site lands on `https://cedar-ops.pages.dev`. Every later push to `main`
+redeploys automatically; pushes to other branches get preview URLs.
+
+**Node version** comes from the `.node-version` file (24) in the repo root, so
+there is nothing to set in the dashboard. To override it there instead, add an
+environment variable `NODE_VERSION = 24` under Settings → Environment variables.
+
+**No environment variables are required.** Cloudflare serves the site from the
+domain root, and the base path already defaults to `/`.
+
+### Base path
+
+Never hardcode a base path. Vite, the dev server and the verify harness all read
+`CEDAR_BASE`, defaulting to `/`. Only a host that serves the site from a subpath
+needs to set it.
+
+### GitHub Pages fallback
+
+`.github/workflows/deploy.yml` still publishes to GitHub Pages and is kept as a
+working fallback. It is **manual-trigger only** (Actions tab → Run workflow), so
+it cannot race the Cloudflare deploy. It needs GitHub Actions enabled on the
+account and **Settings → Pages → Source: GitHub Actions**.
+
+That path serves from `https://<user>.github.io/cedar-ops/`, so the workflow
+passes `CEDAR_BASE=/cedar-ops/` to the build. To test that build locally:
+
+```powershell
+$env:CEDAR_BASE = '/cedar-ops/'; npm run verify
+```
 
 The game server is self-hosted; its deployment is documented in Phase 9.
 

@@ -5,7 +5,9 @@ import { defineConfig, devices } from '@playwright/test'
 const here = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(here, '..', '..')
 
-export const BASE_PATH = '/cedar-ops/'
+// Same variable Vite reads, so `CEDAR_BASE=/cedar-ops/ npm run verify` tests the
+// GitHub Pages fallback build without touching any config.
+export const BASE_PATH = process.env.CEDAR_BASE || '/'
 export const PREVIEW_URL = `http://127.0.0.1:4173${BASE_PATH}`
 export const DEV_URL = `http://127.0.0.1:5173${BASE_PATH}`
 
