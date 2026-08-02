@@ -54,8 +54,14 @@ A **free, open-source, browser-based 3D multiplayer shooter**.
 
 - 3D, **first-person and third-person** (toggleable in-game)
 - **Multiplayer** — small private matches with friends (4v4 target, 8 players max)
-- Runs in the browser on **desktop and mobile phones**, no install, no accounts
-- **Lightweight**: must run on integrated GPUs and mid-range Android phones
+- Runs in the browser on **desktop**, no install, no accounts
+- **Lightweight**: must run on integrated GPUs, not just discrete cards
+
+> **Desktop only — decided 2026-08-02.** A competitive shooter is not playable on
+> touch: someone on a phone loses every duel to someone on a mouse. That is a
+> fairness problem before it is a performance one, and everyone who plays this
+> has a PC. The page must still open on a phone without crashing, but nothing is
+> designed for touch and nothing is tested there.
 - Client hosted free on **Cloudflare Pages**; game server self-hosted on my **Windows RDP**
 - **Stylized-realistic** art direction — the reference points are Valorant and The Finals: correct human proportions, strong silhouettes, clean PBR materials, stylized skin and hair. Not photoreal, not low-poly. Weapons go as close to photoreal as the budget allows, and they can, because they are small, rigid, and carried by normal maps.
 
@@ -69,7 +75,7 @@ A **free, open-source, browser-based 3D multiplayer shooter**.
 **Out of reach — do not propose these.** Not achievable in a browser with 8
 players on WebGL2, regardless of effort: photoreal skin (subsurface scattering),
 real-time global illumination, cloth or hair simulation, alpha-card hair across 8
-characters on mobile (overdraw on tile-based GPUs), screen-space reflections,
+characters (overdraw), screen-space reflections,
 volumetric lighting, high-fidelity facial animation at scale, 4K textures.
 Realistic *bodies* are not on the table; stylized-realistic bodies are. Realistic
 *weapons* are.
@@ -120,7 +126,7 @@ Realistic *bodies* are not on the table; stylized-realistic bodies are. Realisti
 │       ├── core/              ← renderer, game loop, asset loader, input
 │       ├── game/              ← player, camera, weapons, map, effects
 │       ├── net/               ← client socket, prediction, reconciliation
-│       └── ui/                ← HUD, menus, touch controls
+│       └── ui/                ← HUD, menus, settings
 ├── server/
 │   ├── index.js
 │   ├── room.js            ← one match instance
@@ -162,42 +168,44 @@ Sanity checks on server: max speed, max fire rate, position delta per tick. Reje
 
 ## 5. Performance budget (enforce these — check every phase)
 
-> **These numbers are ESTIMATES, not measurements.** They were derived from
-> hardware reasoning, not from this game on real devices. They get corrected
-> with real Samsung A56 data after the Phase 2 stress test. Until that happens,
-> treat any number here as provisional.
-
 **Frame time is the real budget.** Everything below is a proxy for it.
 
-| Metric | Desktop | Mobile |
-|---|---|---|
-| **Frame time** | 16.6 ms | 33.3 ms |
-| FPS target | 60 | 30 |
-| Draw calls | < 300 | < 150 |
-| Triangles on screen | < 1M | < 400k |
-| Texture memory | < 400 MB | < 200 MB |
-| Full-screen post passes | ≤ 3 | ≤ 1 |
-| Shadow-casting lights | 1 | 0 (baked + blob shadows) |
-| Skinned meshes | ≤ 16 | ≤ 10 |
-| Texture size | ≤ 2048 | ≤ 1024 |
-| Total JS bundle (gzip) | < 2 MB | |
-| Total assets | < 15 MB | |
-| Server tick time | < 5 ms with 8 players | |
+Desktop only. The target machine is an integrated GPU, not a gaming card — some
+of the people who will play this have weaker PCs than mine.
+
+| Metric | Budget |
+|---|---|
+| **Frame time** | 16.6 ms |
+| FPS target | 60 |
+| Draw calls | < 300 |
+| Triangles on screen | < 1M |
+| Texture memory | < 400 MB |
+| Full-screen post passes | ≤ 3 |
+| Shadow-casting lights | 1 |
+| Skinned meshes | ≤ 16 |
+| Texture size | ≤ 2048 |
+| Total JS bundle (gzip) | < 2 MB |
+| Total assets | < 15 MB |
+| Server tick time | < 5 ms with 8 players |
+
+Measured at Phase 2 with 8 characters, PBR and an HDRI: **90 draw calls, 235k
+triangles, 15.6 MB texture memory** — comfortably inside every line above. These
+are real numbers now, not estimates.
 
 **What actually costs frames, in order.** Triangles are sixth. Doubling geometry
 is close to free; one badly chosen alpha-blended layer across 8 characters can
 cost 30% of the frame.
 
 1. Draw calls — JS→GL overhead on a thread shared with physics and netcode
-2. Fill rate and overdraw — mobile GPUs are tile-based, transparency is brutal
+2. Fill rate and overdraw — transparency is expensive, especially on integrated GPUs sharing system memory bandwidth
 3. Texture bandwidth and memory
 4. Full-screen post-processing passes
 5. Shadow passes
 6. Triangles
 
 Techniques that are required, not optional:
-- Baked lighting where possible; **one** real-time shadow-casting light (sun) max, disabled on mobile
-- **KTX2 / Basis Universal for every texture — mandatory, not optional.** See §5.1.
+- Baked lighting where possible; **one** real-time shadow-casting light (sun) max
+- **KTX2 / Basis Universal for every texture — mandatory, not optional.** See §5.1. Still required with mobile dropped: it cuts download size and GPU memory everywhere.
 - PBR metalness/roughness with an HDRI environment map, and ACES tone mapping — this is most of what reads as "modern", and tone mapping is free
 - Normal maps instead of geometry for surface detail, especially on weapons
 - Baked ambient occlusion in the texture rather than an SSAO pass
@@ -205,7 +213,7 @@ Techniques that are required, not optional:
 - One texture atlas per material group → minimal draw calls
 - Object pooling for bullets, tracers, particles, decals, audio nodes
 - Frustum culling on, plus manual distance culling for props
-- `renderer.setPixelRatio()` clamped: desktop ≤ 1.5, mobile ≤ 1.25, plus a render-scale slider (0.5–1.0)
+- `renderer.setPixelRatio()` clamped to ≤ 1.5, plus a render-scale slider (0.5–1.0)
 - All models compressed with Draco or Meshopt before commit
 - Show an FPS + draw-call + ping overlay from phase 0 onward (toggle with F3)
 
@@ -214,16 +222,23 @@ Techniques that are required, not optional:
 These are not per-phase decisions. They hold for the life of the project.
 
 **Thermal throttling — design for the throttled state, not the first minute.**
-A phone holds its peak for roughly two minutes and then loses 30–40% as it heats
-up. A 10-minute match is played almost entirely in the throttled state, so that
-is the state the budget must be met in. Never accept a performance result
-measured in the first minute of a session. The auto-scaler exists for this.
+This survives dropping mobile. A laptop, especially on battery or in a thin
+chassis, loses performance minutes into a session exactly as a phone does, and
+a 10-minute match is played almost entirely in that state. Never accept a
+performance result measured in the first minute. The auto-scaler exists for
+this, and it matters more now that the target includes other people's machines
+rather than only mine.
 
-**Mobile memory ceiling — KTX2 is mandatory for all textures.**
-Mobile browsers kill tabs at roughly 1–1.5 GB, and texture memory is what gets
-us there, not geometry. An uncompressed 2048² RGBA texture costs ~16 MB of GPU
-memory; the same texture as KTX2/Basis costs ~4 MB, transcoded to ASTC on mobile
-and BC on desktop. Every texture ships as KTX2. No PNG or JPEG at runtime, ever.
+**KTX2 is mandatory for all textures.**
+An uncompressed 2048² RGBA texture costs ~22 MB of GPU memory; as KTX2 it costs
+a quarter to a half of that. It also cuts download size several times over,
+which matters on a 10 Mbps connection. Every texture ships as KTX2. No PNG or
+JPEG at runtime, ever.
+
+KTX2 has no fixed GPU format — it transcodes at load time to whatever the device
+supports, so the same asset measures differently on different GPUs. A card
+without ETC2 pays 1 byte/pixel for ETC1S content where another pays 0.5. Measure
+per machine rather than assuming.
 
 **Drone aerial camera — full-screen only, never picture-in-picture, and the map
 must be built for it from Phase 3 onward.**
@@ -255,7 +270,7 @@ Each phase ends with: it runs, I tested it, it's committed.
 
 ### Phase 0 — Skeleton
 Vite project, repo structure, root npm scripts (`dev:client`, `build`, `verify`), Three.js scene with a ground plane and a lit cube, F3 debug overlay (FPS, draw calls, tris), the Playwright self-verification harness in `tools/verify/`, and one live deploy to prove the pipeline.
-**Done when**: `npm run verify` passes with a screenshot showing the cube, and I open the Cloudflare Pages URL on phone and desktop and see it running at 60/30 fps.
+**Done when**: `npm run verify` passes with a screenshot showing the cube, and I open the Cloudflare Pages URL and see it running at 60 fps.
 
 `dev:server` is deliberately absent until Phase 4, when `server/index.js` first exists — no placeholder scripts.
 
@@ -266,7 +281,7 @@ Rapier physics world, capsule character controller, WASD + mouse look (Pointer L
 ### Phase 2 — Character + third person
 Load a rigged .glb character, animation set (idle/walk/run/jump/crouch), animation blending, `V` toggle, third-person spring-arm camera with collision, hide head mesh in FP.
 
-**Stress test, run before any integration code**: 8 characters at LOD0 with PBR materials and an HDRI, measured on the Samsung A56 — including after five minutes of continuous running, so the number recorded is the throttled one. The §5 budget stays marked as estimates until this produces real data.
+**Stress test — done.** 8 characters with PBR and an HDRI measured 90 draw calls, 235k triangles, 15.6 MB texture memory. Those numbers are now in §5.
 
 Animation is driven by simulation state (`speed`, `onGround`, `crouching` from `shared/movement.js`), never by input. Remote players arrive over the network as position and velocity with no key presses attached — animation keyed to input would leave them sliding around in a permanent idle pose.
 
@@ -274,7 +289,7 @@ Animation is driven by simulation state (`speed`, `onGround`, `crouching` from `
 
 ### Phase 3 — Map v1
 Blockout the map (code-generated or modeled), collision, spawn points, skybox, fog, baked-style lighting, atlas materials. Verify performance budget.
-**Done when**: full map runs inside the budget on my phone.
+**Done when**: the full map runs inside the §5 budget on an integrated GPU.
 
 ### Phase 4 — Naive multiplayer
 geckos.io server + client, room codes, join/leave, players broadcast state, other players appear and move (no prediction yet, will look laggy — that's expected).
@@ -297,9 +312,12 @@ Weapons, firing, recoil pattern, fire rate, reload, ammo, muzzle flash + tracer 
 
 **Done when**: shooting feels responsive at 100 ms ping and hits register fairly.
 
-### Phase 7 — UI / HUD / mobile
-Landing page (create/join room, nickname), HUD (health, ammo, crosshair, killfeed, scoreboard on Tab), pause/settings (sensitivity, render scale, shadows), **touch controls** (left stick move, right drag look, fire/jump/crouch/ADS buttons), auto quality detection on mobile.
-**Done when**: I can play a full match from my phone.
+### Phase 7 — UI / HUD
+Landing page (create/join room, nickname), HUD (health, ammo, crosshair, killfeed, scoreboard on Tab), pause/settings (sensitivity, render scale, shadows), key rebinding.
+
+Touch controls, the virtual joystick and the mobile UI were dropped with mobile support on 2026-08-02 — see §1. Roughly half of this phase went with them.
+
+**Done when**: I can play a full match start to finish without touching the URL bar.
 
 ### Phase 8 — Match flow + polish
 TDM scoring, round timer, team assignment, end-of-match screen, sounds (footsteps, gunfire, hit markers), particles, hit feedback.
@@ -339,7 +357,7 @@ Rules:
 - Only `.glb`, never `.fbx`/`.obj` at runtime
 - Compress every model with `gltf-transform` (Draco/Meshopt) before committing
 - Textures ≤ 1024 for props, ≤ 2048 for the atlas
-- **Every texture ships as KTX2 / Basis Universal — mandatory (§5.1).** No PNG, JPEG or WebP at runtime. WebP is smaller to download but decodes to uncompressed RGBA in GPU memory, which is the resource that actually runs out on a phone.
+- **Every texture ships as KTX2 / Basis Universal — mandatory (§5.1).** No PNG, JPEG or WebP at runtime. WebP is smaller to download but decodes to uncompressed RGBA in GPU memory, which is the resource that runs out first.
 - Never commit raw source files (`.blend`, `.fbx`) to the repo — keep them out via `.gitignore`
 
 When a phase needs assets, **tell me exactly which pack to download and where to place the files**, then wait — don't invent placeholder geometry and move on unless I say so.
