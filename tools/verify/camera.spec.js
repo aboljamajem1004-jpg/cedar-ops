@@ -30,6 +30,31 @@ test('V toggles between first and third person', async ({ page }) => {
   await expect.poll(() => mode(page), { timeout: 5000 }).toBe('first')
 })
 
+test('holding V does not strobe the camera', async ({ page }) => {
+  await boot(page)
+  expect(await mode(page)).toBe('first')
+
+  // Playwright's keyboard.down() sends a single keydown and never simulates OS
+  // auto-repeat, so driving this through the normal input path cannot reach the
+  // bug. The browser marks repeats with event.repeat, so they are dispatched
+  // directly.
+  //
+  // Three repeats after the initial press, for four events total. That count
+  // matters: an EVEN number of unguarded toggles returns to 'first', while the
+  // guard allows exactly one and lands on 'third'. An odd total would end on
+  // 'third' either way and the test would pass against the bug.
+  await page.evaluate((code) => {
+    window.dispatchEvent(new KeyboardEvent('keydown', { code, repeat: false, bubbles: true }))
+    for (let i = 0; i < 3; i++) {
+      window.dispatchEvent(new KeyboardEvent('keydown', { code, repeat: true, bubbles: true }))
+    }
+  }, UI_KEYS.TOGGLE_CAMERA)
+
+  await expect
+    .poll(() => mode(page), { timeout: 5000 })
+    .toBe('third')
+})
+
 test('the third-person camera sits behind the player, not inside them', async ({ page }) => {
   await boot(page)
   await page.keyboard.press(UI_KEYS.TOGGLE_CAMERA)
@@ -87,6 +112,39 @@ test('first person hides the head but keeps the body', async ({ page }) => {
 
   const after = await page.evaluate(() => window.__CEDAR_DEBUG__.headHidden)
   expect(after).toBe(true)
+})
+
+test('no head parts remain visible while running', async ({ page }) => {
+  // Standing still is the state that hid two bugs: limbs flickering from stale
+  // skinned-mesh culling bounds, and eyes and eyebrows left floating because
+  // they are separate meshes that were never tagged as head. Both only appear
+  // once an animation is running, so this samples mid-stride.
+  await boot(page)
+
+  const parts = await page.evaluate(() => window.__CEDAR_DEBUG__.headParts)
+  // Head, plus eyes and eyebrows as their own meshes.
+  expect(parts, 'every head-region mesh is on the head layer').toBeGreaterThanOrEqual(3)
+
+  await page.evaluate(() => window.__CEDAR_DEBUG__.setPitch?.(-1.1))
+  await page.keyboard.down('KeyW')
+  await page.waitForFunction(() => window.__CEDAR_DEBUG__.player.speed > 4, null, {
+    timeout: 30_000,
+  })
+
+  // Sample several frames mid-run: a flicker shows up in some frames and not
+  // others, so one screenshot could easily miss it.
+  fs.mkdirSync(outDir, { recursive: true })
+  for (let i = 0; i < 3; i++) {
+    await page.waitForTimeout(220)
+    await page.screenshot({ path: path.join(outDir, `fp-running-${i}.png`) })
+  }
+
+  const culling = await page.evaluate(() => window.__CEDAR_DEBUG__.bodyCulled)
+  await page.keyboard.up('KeyW')
+
+  // Frustum culling off for the local body — its bounds come from the bind
+  // pose and go stale the moment it animates.
+  expect(culling, 'local body is never frustum-culled').toBe(false)
 })
 
 test('third person shows the head again', async ({ page }) => {

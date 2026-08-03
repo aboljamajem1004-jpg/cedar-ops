@@ -117,6 +117,8 @@ export function createDebugOverlay({ renderer, isWebGL2, msaaSamples, quality, o
   let bindingsVisible = false
 
   window.addEventListener('keydown', (e) => {
+    // Auto-repeat would flip these on and off for as long as the key is held.
+    if (e.repeat) return
     if (e.code === UI_KEYS.TOGGLE_OVERLAY) {
       e.preventDefault()
       toggle()

@@ -10,9 +10,24 @@ import { MOVEMENT } from '../../../shared/constants.js'
  *
  * @param {{ physics: any, tuning: typeof MOVEMENT, spawn: {x:number,y:number,z:number} }} opts
  */
-export function createPlayer({ physics, tuning, spawn }) {
+/** Ticks of movement history kept when tracing — four seconds at 30 Hz. */
+const TRACE_LENGTH = 120
+
+export function createPlayer({ physics, tuning, spawn, trace = false }) {
   const state = createState(spawn.x, spawn.y, spawn.z)
   const previousPos = { ...state.pos }
+
+  /**
+   * Per-tick record of what movement asked for versus what collision allowed.
+   *
+   * The difference between the two is where every "snagging on a step" or
+   * "pulled backward" bug lives, and it is invisible from the outside — the
+   * position alone cannot tell you whether the controller refused the motion or
+   * actively pushed back.
+   *
+   * @type {Array<any>}
+   */
+  const traceLog = []
 
   let height = tuning.PLAYER_HEIGHT
 
@@ -40,8 +55,31 @@ export function createPlayer({ physics, tuning, spawn }) {
     previousPos.z = state.pos.z
 
     const desired = computeMovement(state, input, dt, tuning)
-    const { movement, grounded } = character.move(desired, state.vel.y > 0)
-    applyCollision(state, movement, grounded, dt)
+    const wasOnGround = state.onGround
+    // Snap is suppressed while rising, and for one step after a climb — see
+    // physics.js move() for why the second case matters.
+    const { movement, grounded } = character.move(desired, state.vel.y > 0 || state.climbed)
+    applyCollision(state, desired, movement, grounded, dt)
+
+    if (trace) {
+      traceLog.push({
+        y: +state.pos.y.toFixed(4),
+        z: +state.pos.z.toFixed(4),
+        // What was asked for, and what came back.
+        dz: +desired.z.toFixed(4),
+        dy: +desired.y.toFixed(4),
+        cz: +movement.z.toFixed(4),
+        cy: +movement.y.toFixed(4),
+        // Negative means the controller pushed back against the requested
+        // direction, which is the signature of a depenetration fight.
+        opposed: desired.z !== 0 && Math.sign(movement.z) !== Math.sign(desired.z),
+        ground: grounded,
+        wasGround: wasOnGround,
+        vy: +state.vel.y.toFixed(3),
+        speed: +Math.hypot(state.vel.x, state.vel.z).toFixed(3),
+      })
+      if (traceLog.length > TRACE_LENGTH) traceLog.shift()
+    }
 
     const wantedHeight = state.crouching ? tuning.PLAYER_CROUCH_HEIGHT : tuning.PLAYER_HEIGHT
     if (wantedHeight !== height) {
@@ -75,6 +113,10 @@ export function createPlayer({ physics, tuning, spawn }) {
     /** The player's own collider, so casts can be told to ignore it. */
     get collider() {
       return character.collider
+    },
+    /** Per-tick movement history, when created with trace enabled. */
+    get trace() {
+      return traceLog
     },
     get height() {
       return height

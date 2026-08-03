@@ -67,7 +67,11 @@ export async function createPhysics() {
       // slide, not hold the player still.
       controller.setMinSlopeSlideAngle(opts.slopeLimitRad * 0.9)
       controller.enableAutostep(opts.stepHeight, opts.radius * 0.5, true)
-      controller.enableSnapToGround(opts.stepHeight)
+      // Snap distance must stay BELOW a single step rise. At or above it, the
+      // controller can autostep up and then immediately snap back down onto the
+      // stair it just left.
+      opts.snapDistance = opts.stepHeight * 0.5
+      controller.enableSnapToGround(opts.snapDistance)
       controller.setApplyImpulsesToDynamicBodies(false)
 
       return {
@@ -79,14 +83,21 @@ export async function createPhysics() {
          * Resolve a desired translation against the world.
          *
          * @param {{x:number,y:number,z:number}} desired
-         * @param {boolean} rising true while moving upward, e.g. a jump
+         * @param {boolean} noSnap disable snap-to-ground for this step
          * @returns {{ movement: {x:number,y:number,z:number}, grounded: boolean }}
          */
-        move(desired, rising) {
-          // Snapping to ground during a jump would cancel the jump on its first
-          // step, so it is switched off while rising.
-          if (rising) controller.disableSnapToGround()
-          else controller.enableSnapToGround(opts.stepHeight)
+        move(desired, noSnap) {
+          // Snap-to-ground has to be off in two cases, or it undoes legitimate
+          // upward motion:
+          //
+          //  - during a jump, where it would cancel the jump on its first step
+          //  - on the step after an autostep, where it finds the LOWER stair
+          //    still within snapping range and pulls the capsule back down
+          //
+          // The second case produced a visible oscillation: up 0.06, down 0.10,
+          // up 0.11, with the controller pushing backward on alternate ticks.
+          if (noSnap) controller.disableSnapToGround()
+          else controller.enableSnapToGround(opts.snapDistance)
 
           controller.computeColliderMovement(collider, desired)
           const movement = controller.computedMovement()

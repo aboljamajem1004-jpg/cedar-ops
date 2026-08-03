@@ -16,7 +16,7 @@ import {
 
 /** Collision-free stand-in: everything the player asked for is allowed. */
 function freeMove(state, desired, dt, grounded) {
-  applyCollision(state, desired, grounded, dt)
+  applyCollision(state, desired, desired, grounded, dt)
 }
 
 const DT = 1 / 30
@@ -144,6 +144,68 @@ test('changing direction sheds the old velocity', () => {
   expect(peak).toBeLessThanOrEqual(MOVEMENT.SPEED_WALK * 1.02)
   expect(Math.abs(state.vel.x)).toBeLessThan(0.1)
   expect(Math.abs(state.vel.z)).toBeCloseTo(MOVEMENT.SPEED_WALK, 2)
+})
+
+test('climbing a step keeps momentum instead of losing it', () => {
+  // Regression: the character controller spends part of the requested
+  // horizontal motion lifting the capsule onto a stair. Rewriting velocity from
+  // that reduced value treats lost distance as lost speed, and the player
+  // snags on every step — measured at 6.5 m/s collapsing to about 2.
+  const state = createState(0, 0, 0)
+  state.onGround = true
+
+  for (let i = 0; i < 60; i++) {
+    freeMove(state, computeMovement(state, { buttons: BTN.FORWARD, yaw: 0 }, DT), DT, true)
+  }
+  const cruising = Math.hypot(state.vel.x, state.vel.z)
+  expect(cruising).toBeCloseTo(MOVEMENT.SPEED_WALK, 3)
+
+  // One step where the controller allowed only 60% of the horizontal request
+  // and lifted the capsule 5 cm — exactly what the trace recorded on a stair.
+  const desired = computeMovement(state, { buttons: BTN.FORWARD, yaw: 0 }, DT)
+  const corrected = { x: desired.x * 0.6, y: 0.05, z: desired.z * 0.6 }
+  applyCollision(state, desired, corrected, true, DT)
+
+  expect(state.climbed, 'recognised as a climb').toBe(true)
+  expect(Math.hypot(state.vel.x, state.vel.z), 'speed survives the step').toBeCloseTo(
+    cruising,
+    3
+  )
+})
+
+test('being blocked by a wall still removes velocity', () => {
+  // The counterpart: a genuine block must NOT keep momentum, or the player
+  // would accumulate speed into a wall.
+  const state = createState(0, 0, 0)
+  state.onGround = true
+
+  for (let i = 0; i < 60; i++) {
+    freeMove(state, computeMovement(state, { buttons: BTN.FORWARD, yaw: 0 }, DT), DT, true)
+  }
+
+  const desired = computeMovement(state, { buttons: BTN.FORWARD, yaw: 0 }, DT)
+  // Blocked flat. corrected.y is about zero rather than equal to desired.y,
+  // because the ground stops the downward stick — which is exactly what every
+  // grounded step looks like, and what a naive "rose more than requested" test
+  // would misread as a climb.
+  applyCollision(state, desired, { x: 0, y: 0.0002, z: 0 }, true, DT)
+
+  expect(state.climbed, 'flat ground is not a climb').toBe(false)
+  expect(Math.hypot(state.vel.x, state.vel.z)).toBeLessThan(0.01)
+})
+
+test('walking on flat ground is never mistaken for a climb', () => {
+  // The bug this guards: while grounded, desired.y is the negative ground stick
+  // and corrected.y is about zero, so corrected.y > desired.y holds on EVERY
+  // step. Classifying those as climbs means a wall never removes velocity.
+  const state = createState(0, 0, 0)
+  state.onGround = true
+
+  for (let i = 0; i < 40; i++) {
+    const desired = computeMovement(state, { buttons: BTN.FORWARD, yaw: 0 }, DT)
+    applyCollision(state, desired, { x: desired.x, y: 0.0002, z: desired.z }, true, DT)
+    expect(state.climbed, `tick ${i} on flat ground`).toBe(false)
+  }
 })
 
 test('jump take-off matches the tuned height', () => {

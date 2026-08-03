@@ -33,6 +33,8 @@ export function createState(x = 0, y = 0, z = 0) {
     vel: { x: 0, y: 0, z: 0 },
     onGround: false,
     crouching: false,
+    /** True on a step this frame the controller lifted the capsule up a step. */
+    climbed: false,
   }
 }
 
@@ -43,6 +45,7 @@ export function cloneState(state) {
     vel: { ...state.vel },
     onGround: state.onGround,
     crouching: state.crouching,
+    climbed: state.climbed,
   }
 }
 
@@ -59,6 +62,7 @@ export function copyState(target, source) {
   target.vel.z = source.vel.z
   target.onGround = source.onGround
   target.crouching = source.crouching
+  target.climbed = source.climbed
 }
 
 /** Take-off speed for the configured jump height: v = sqrt(2gh). */
@@ -155,30 +159,55 @@ export function computeMovement(state, input, dt, t = MOVEMENT) {
 }
 
 /**
+ * Upward movement that counts as climbing a step, in metres.
+ *
+ * The test is "did the capsule actually rise", not "did it rise more than
+ * requested". While grounded the requested vertical motion is always negative
+ * (the ground stick) and the allowed motion is about zero, so comparing the two
+ * classifies every flat-ground step as a climb. 1 cm clears the millimetre of
+ * noise the controller returns on level ground and is far below any real step.
+ */
+const STEP_LIFT_EPSILON = 0.01
+
+/**
  * Reconcile velocity with what the collision query actually allowed.
  *
  * Deriving velocity from the corrected translation handles walls, ceilings and
  * landings in one rule, and preserves the slide along a wall that the character
  * controller already computed.
  *
+ * Climbing a step is the exception. When the controller lifts the capsule onto
+ * a stair it spends part of the requested horizontal motion doing so, and
+ * rewriting velocity from that reduced number treats lost DISTANCE as lost
+ * SPEED. The result is a hard slowdown on every step — measured at 6.5 m/s
+ * dropping to about 2 — followed by a re-acceleration, which reads as snagging.
+ * Momentum is preserved through a climb instead.
+ *
  * @param {MoveState} state mutated in place
+ * @param {Vec3} desired what was requested this step
  * @param {Vec3} corrected movement the collision query permitted
  * @param {boolean} grounded
  * @param {number} dt seconds
  */
-export function applyCollision(state, corrected, grounded, dt) {
+export function applyCollision(state, desired, corrected, grounded, dt) {
   state.pos.x += corrected.x
   state.pos.y += corrected.y
   state.pos.z += corrected.z
 
+  // Rose while asking to go down or stay level: the controller stepped us up.
+  const climbed = desired.y <= 0 && corrected.y > STEP_LIFT_EPSILON
+
   if (dt > 0) {
-    state.vel.x = corrected.x / dt
-    state.vel.z = corrected.z / dt
+    if (!climbed) {
+      state.vel.x = corrected.x / dt
+      state.vel.z = corrected.z / dt
+    }
     // On the ground the downward stick velocity is spent, not carried.
     state.vel.y = grounded ? 0 : corrected.y / dt
   }
 
   state.onGround = grounded
+  state.climbed = climbed
 }
 
 /**

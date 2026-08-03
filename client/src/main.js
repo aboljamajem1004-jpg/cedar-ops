@@ -96,7 +96,10 @@ const player = createPlayer({
   physics,
   tuning,
   spawn: resolveSpawn({ x: 0, y: tuning.SPAWN_HEIGHT, z: 8 }),
+  // ?trace=1 records what movement asked for against what collision allowed.
+  trace: new URLSearchParams(location.search).get('trace') === '1',
 })
+debug.getTrace = () => player.trace
 
 // The rig needs physics for the third-person spring arm's ray cast, so it is
 // built after the world exists rather than alongside the renderer.
@@ -105,7 +108,12 @@ const view = createCameraRig({
   camera: cameraTuning,
   physics,
   onModeChange: (next) => {
+    // Updated here rather than only in the render loop. The camera layers
+    // change synchronously inside the keydown handler, so a mirror that only
+    // refreshes on the next frame reports a stale value whenever rendering is
+    // slow — which read as a flaky test rather than the timing hole it is.
     debug.cameraMode = next
+    debug.headHidden = next === 'first'
     overlay.log(`camera: ${next} person`)
   },
 })
@@ -141,7 +149,11 @@ const animationFile = await assets.loadModel('assets/models/animations.glb').cat
   throw error
 })
 
-body = createCharacter({ model: characterModel, clips: animationFile.animations })
+body = createCharacter({
+  model: characterModel,
+  clips: animationFile.animations,
+  alwaysVisible: true,
+})
 scene.add(body.root)
 animator = createAnimationState({ character: body, animation: animationTuning })
 if (animator.missingClips.length) {
@@ -293,6 +305,8 @@ startLoop({
     debug.headHidden = !camera.layers.isEnabled(HEAD_LAYER)
     debug.hasHeadMesh = Boolean(body?.headMesh)
     debug.meshNames = body ? body.meshes.map((m) => m.name) : []
+    debug.headParts = body ? body.headParts.length : 0
+    debug.bodyCulled = body ? body.meshes.some((m) => m.frustumCulled) : null
     debug.animation = animator?.current ?? null
 
     overlay.update()

@@ -16,21 +16,36 @@ export const HEAD_LAYER = 1
  * uses the identical 65-joint skeleton, so the clips bind by bone name with no
  * retargeting and are never duplicated per instance.
  *
- * @param {{ model: any, clips: THREE.AnimationClip[], teamColor?: number }} opts
+ * @param {{ model: any, clips: THREE.AnimationClip[], teamColor?: number,
+ *           alwaysVisible?: boolean }} opts
  */
-export function createCharacter({ model, clips, teamColor }) {
+export function createCharacter({ model, clips, teamColor, alwaysVisible = false }) {
   const root = cloneSkinned(model.scene)
 
   /** @type {THREE.SkinnedMesh|null} */
   let headMesh = null
   /** @type {THREE.SkinnedMesh[]} */
   const meshes = []
+  /**
+   * Every mesh moved to the head layer. More than one: the split head, plus
+   * eyes and eyebrows, which ship as separate fully head-weighted meshes and
+   * would otherwise float in mid-air once the head is hidden.
+   * @type {THREE.SkinnedMesh[]}
+   */
+  const headParts = []
 
   root.traverse((object) => {
     if (!object.isMesh && !object.isSkinnedMesh) return
     meshes.push(object)
     object.castShadow = true
     object.receiveShadow = true
+
+    // three culls a SkinnedMesh against bounds computed from its BIND pose, not
+    // its animated pose. For the local player — whose body surrounds the camera
+    // and whose arms swing well outside those bounds while running — the test
+    // fails intermittently and limbs flicker in and out of view. Culling saves
+    // nothing for a mesh that is always on screen anyway.
+    if (alwaysVisible) object.frustumCulled = false
 
     // Materials are cloned per character so a team colour on one player does
     // not tint every other player sharing the source model.
@@ -42,7 +57,8 @@ export function createCharacter({ model, clips, teamColor }) {
     // collision — a name lookup finds nothing and the head stays visible in
     // first person, which is exactly the bug this replaced.
     if (object.userData?.cedarPart === 'head') {
-      headMesh = object
+      headMesh = headMesh ?? object
+      headParts.push(object)
       object.layers.set(HEAD_LAYER)
     }
   })
@@ -63,6 +79,9 @@ export function createCharacter({ model, clips, teamColor }) {
     meshes,
     get headMesh() {
       return headMesh
+    },
+    get headParts() {
+      return headParts
     },
     /** @param {number} dt seconds */
     update(dt) {

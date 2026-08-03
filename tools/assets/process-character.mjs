@@ -161,8 +161,16 @@ function splitHead(document) {
         }
       }
 
-      // Nothing to split: this primitive is entirely head or entirely body.
-      if (headVertices === 0 || headVertices === vertexCount) continue
+      // A mesh weighted entirely to head bones IS a head part — eyes, eyebrows
+      // and hair ship as their own meshes in this pack. They need the same tag,
+      // or hiding the head leaves them floating in mid-air where the head used
+      // to be. Nothing to split here, only to label.
+      if (headVertices === vertexCount) {
+        mesh.setExtras({ ...mesh.getExtras(), cedarPart: 'head' })
+        console.log(`  tagged "${mesh.getName()}" as head (fully head-weighted)`)
+        continue
+      }
+      if (headVertices === 0) continue
 
       const indexArray = indices.getArray()
       const headIndices = []

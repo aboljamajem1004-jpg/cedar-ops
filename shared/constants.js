@@ -155,6 +155,8 @@ export const CAMERA = {
   TP_MIN_DISTANCE: 0.5, // closest the spring arm may pull in before clipping the body, m
   TP_COLLISION_PAD: 0.25, // gap kept between camera and any surface it hits, m
   FP_FORWARD: 0.16, // eye offset ahead of the neck axis, m — see below
+  STEP_SMOOTH_RATE: 16, // how fast the camera catches up vertically after a step, per second
+  STEP_SMOOTH_MAX: 0.6, // vertical jump above which the camera snaps instead of easing, m
 }
 
 /**

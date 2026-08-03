@@ -26,6 +26,8 @@ export function createCameraRig({ tuning, camera: settings, physics, onModeChang
   /** @type {'first'|'third'} */
   let mode = 'first'
   let eyeHeight = tuning.EYE_HEIGHT
+  /** Smoothed camera height — see the note in update(). */
+  let smoothedY = null
 
   // Scratch vectors, reused every frame so the render loop allocates nothing.
   const head = new THREE.Vector3()
@@ -49,6 +51,9 @@ export function createCameraRig({ tuning, camera: settings, physics, onModeChang
 
   window.addEventListener('keydown', (e) => {
     if (e.code !== UI_KEYS.TOGGLE_CAMERA) return
+    // Ignore auto-repeat. Holding the key down fires keydown continuously, and
+    // without this the camera strobes between modes for as long as it is held.
+    if (e.repeat) return
     e.preventDefault()
     toggle()
   })
@@ -64,7 +69,22 @@ export function createCameraRig({ tuning, camera: settings, physics, onModeChang
     const blend = 1 - Math.exp(-tuning.CROUCH_LERP * view.dt)
     eyeHeight += (target - eyeHeight) * blend
 
-    head.set(view.position.x, view.position.y + eyeHeight, view.position.z)
+    // Step smoothing. The character controller lifts the capsule onto a stair
+    // in a single simulation step, and autostep tends to overshoot by a few
+    // centimetres before settling — both of which read as a vertical snap.
+    // Easing the CAMERA height while the body moves instantly keeps collision
+    // exact and the view smooth.
+    //
+    // Large changes snap rather than ease, so a real fall or a teleport is not
+    // turned into a slow float.
+    const targetY = view.position.y + eyeHeight
+    if (smoothedY === null || Math.abs(targetY - smoothedY) > settings.STEP_SMOOTH_MAX) {
+      smoothedY = targetY
+    } else {
+      smoothedY += (targetY - smoothedY) * (1 - Math.exp(-settings.STEP_SMOOTH_RATE * view.dt))
+    }
+
+    head.set(view.position.x, smoothedY, view.position.z)
     camera.rotation.y = view.yaw
     camera.rotation.x = view.pitch
 
